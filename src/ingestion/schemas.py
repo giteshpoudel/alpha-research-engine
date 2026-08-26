@@ -93,12 +93,32 @@ ENGINE = ReplacingMergeTree
 ORDER BY (source, post_id)
 """
 
+# Bucket metrics are recomputed with replace semantics: re-running the
+# aggregator for the same (bucket_size, bucket_start, ticker) replaces the row.
+_SENTIMENT_METRICS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.sentiment_metrics
+(
+    bucket_size LowCardinality(String),
+    bucket_start DateTime64(3),
+    ticker String,
+    post_count UInt32,
+    mean_score Float32,
+    weighted_score Float32,
+    engagement_total UInt64,
+    velocity Float32,
+    engagement_ratio Float32,
+    computed_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (bucket_size, bucket_start, ticker)
+"""
+
 
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all Phase 1 tables. Safe to re-run."""
     db = database_name()
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
-    for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL):
+    for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL):
         client.command(ddl.format(db=db))
 
 

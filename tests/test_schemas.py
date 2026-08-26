@@ -82,6 +82,29 @@ def test_funding_rates_columns(ch_client):
     assert cols["next_funding_ts"] == "DateTime64(3)"
 
 
+def test_sentiment_metrics_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.sentiment_metrics").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["bucket_size"] == "LowCardinality(String)"
+    assert cols["bucket_start"] == "DateTime64(3)"
+    assert cols["ticker"] == "String"
+    assert cols["post_count"] == "UInt32"
+    assert cols["mean_score"] == "Float32"
+    assert cols["weighted_score"] == "Float32"
+    assert cols["engagement_total"] == "UInt64"
+    assert cols["velocity"] == "Float32"
+    assert cols["engagement_ratio"] == "Float32"
+    assert cols["computed_at"] == "DateTime64(3)"
+
+
+def test_sentiment_metrics_engine(ch_client):
+    rows = ch_client.query(
+        "SELECT engine FROM system.tables WHERE database = {db:String} AND name = 'sentiment_metrics'",
+        parameters={"db": database_name()},
+    ).result_rows
+    assert rows and "ReplacingMergeTree" in rows[0][0]
+
+
 from types import SimpleNamespace
 from unittest.mock import Mock
 import uuid
