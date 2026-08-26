@@ -1,4 +1,8 @@
 .env
 .venv/
 data/
-*.db.worktrees/
+*.db
+.worktrees/
+__pycache__/
+.pytest_cache/
+
