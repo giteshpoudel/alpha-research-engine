@@ -133,3 +133,20 @@ def test_post_id_to_uuid_is_deterministic():
     assert first == post_id_to_uuid("tweet:123")
     assert first != post_id_to_uuid("tweet:124")
     uuid.UUID(first)  # raises unless valid UUID string
+
+
+from src.ingestion.schemas import main, wait_for_services
+
+
+def test_wait_for_services_returns_when_up():
+    wait_for_services(timeout=30.0)  # must not raise while the stack is up
+
+
+def test_wait_for_services_times_out():
+    with pytest.raises(RuntimeError, match="Timed out"):
+        wait_for_services(timeout=0.0)
+
+
+def test_main_is_idempotent():
+    main()
+    main()  # second run must not raise

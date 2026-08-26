@@ -6,6 +6,7 @@ Usage: python -m src.ingestion.schemas
 from __future__ import annotations
 
 import os
+import time
 import uuid
 
 import clickhouse_connect
@@ -156,3 +157,48 @@ def create_qdrant_schema(client: QdrantClient) -> None:
             field_name=field_name,
             field_schema=schema_type,
         )
+
+
+def _clickhouse_ready() -> bool:
+    try:
+        get_clickhouse_client().command("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
+def _qdrant_ready() -> bool:
+    try:
+        get_qdrant_client().get_collections()
+        return True
+    except Exception:
+        return False
+
+
+def wait_for_services(timeout: float = 60.0) -> None:
+    """Block until ClickHouse and Qdrant both answer, with exponential backoff."""
+    deadline = time.monotonic() + timeout
+    delay = 1.0
+    while True:
+        # Deadline first: timeout=0.0 must raise even when the stack is up.
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                "Timed out waiting for ClickHouse/Qdrant. "
+                "Is the stack running? Try: docker compose up -d"
+            )
+        if _clickhouse_ready() and _qdrant_ready():
+            return
+        time.sleep(delay)
+        delay = min(delay * 2, 10.0)
+
+
+def main() -> None:
+    wait_for_services()
+    create_clickhouse_schema(get_clickhouse_client())
+    create_qdrant_schema(get_qdrant_client())
+    print(f"ClickHouse: database '{database_name()}' ready (ohlcv, funding_rates, sentiment_posts)")
+    print(f"Qdrant: collection '{QDRANT_COLLECTION}' ready ({QDRANT_VECTOR_SIZE}-dim cosine)")
+
+
+if __name__ == "__main__":
+    main()
