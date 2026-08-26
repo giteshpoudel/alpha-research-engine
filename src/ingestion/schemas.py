@@ -6,10 +6,13 @@ Usage: python -m src.ingestion.schemas
 from __future__ import annotations
 
 import os
+import uuid
 
 import clickhouse_connect
 from clickhouse_connect.driver import Client as ClickHouseClient
 from dotenv import load_dotenv
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 
 
 def _env(name: str, default: str) -> str:
@@ -95,3 +98,61 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL):
         client.command(ddl.format(db=db))
+
+
+QDRANT_COLLECTION = "social_posts"
+QDRANT_VECTOR_SIZE = 768  # Ollama nomic-embed-text output dimension
+
+# Fixed namespace so post_id_to_uuid is stable across runs and machines.
+_POST_ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "alpha-research-engine")
+
+_PAYLOAD_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
+    ("post_id", PayloadSchemaType.KEYWORD),
+    ("source", PayloadSchemaType.KEYWORD),
+    ("tickers", PayloadSchemaType.KEYWORD),
+    ("published_at", PayloadSchemaType.INTEGER),  # unix seconds; range-filterable
+)
+
+
+def post_id_to_uuid(post_id: str) -> str:
+    """Map a source post ID to a deterministic Qdrant point ID.
+
+    Deterministic IDs make upserts idempotent: re-ingesting the same post
+    overwrites its point instead of creating a duplicate.
+    """
+    return str(uuid.uuid5(_POST_ID_NAMESPACE, post_id))
+
+
+def get_qdrant_client() -> QdrantClient:
+    load_dotenv()
+    return QdrantClient(
+        host=_env("QDRANT_HOST", "localhost"),
+        port=int(_env("QDRANT_PORT", "6333")),
+    )
+
+
+def create_qdrant_schema(client: QdrantClient) -> None:
+    """Create the social_posts collection and payload indexes. Safe to re-run.
+
+    Raises RuntimeError if the collection exists with a different vector
+    size — recreating it would silently drop every embedded post.
+    """
+    if client.collection_exists(QDRANT_COLLECTION):
+        existing = client.get_collection(QDRANT_COLLECTION).config.params.vectors.size
+        if existing != QDRANT_VECTOR_SIZE:
+            raise RuntimeError(
+                f"Collection '{QDRANT_COLLECTION}' exists with vector size {existing}, "
+                f"expected {QDRANT_VECTOR_SIZE}. Refusing to recreate (would drop data)."
+            )
+    else:
+        client.create_collection(
+            collection_name=QDRANT_COLLECTION,
+            vectors_config=VectorParams(size=QDRANT_VECTOR_SIZE, distance=Distance.COSINE),
+        )
+    # Re-applying an identical index is a no-op on the server, so this stays idempotent.
+    for field_name, schema_type in _PAYLOAD_INDEXES:
+        client.create_payload_index(
+            collection_name=QDRANT_COLLECTION,
+            field_name=field_name,
+            field_schema=schema_type,
+        )

@@ -79,3 +79,57 @@ def test_funding_rates_columns(ch_client):
     assert cols["funding_rate"] == "Float64"
     assert cols["mark_price"] == "Float64"
     assert cols["next_funding_ts"] == "DateTime64(3)"
+
+
+from types import SimpleNamespace
+from unittest.mock import Mock
+import uuid
+
+from qdrant_client.models import Distance
+
+from src.ingestion.schemas import (
+    QDRANT_COLLECTION,
+    QDRANT_VECTOR_SIZE,
+    create_qdrant_schema,
+    get_qdrant_client,
+    post_id_to_uuid,
+)
+
+
+@pytest.fixture(scope="module")
+def qd_client():
+    client = get_qdrant_client()
+    create_qdrant_schema(client)
+    return client
+
+
+def test_collection_exists(qd_client):
+    assert qd_client.collection_exists(QDRANT_COLLECTION)
+
+
+def test_collection_vector_config(qd_client):
+    info = qd_client.get_collection(QDRANT_COLLECTION)
+    assert info.config.params.vectors.size == QDRANT_VECTOR_SIZE
+    assert info.config.params.vectors.distance == Distance.COSINE
+
+
+def test_payload_indexes(qd_client):
+    info = qd_client.get_collection(QDRANT_COLLECTION)
+    assert {"post_id", "source", "tickers", "published_at"} <= set(info.payload_schema)
+
+
+def test_mismatched_vector_size_raises():
+    client = Mock()
+    client.collection_exists.return_value = True
+    client.get_collection.return_value = SimpleNamespace(
+        config=SimpleNamespace(params=SimpleNamespace(vectors=SimpleNamespace(size=512)))
+    )
+    with pytest.raises(RuntimeError, match="vector size"):
+        create_qdrant_schema(client)
+
+
+def test_post_id_to_uuid_is_deterministic():
+    first = post_id_to_uuid("tweet:123")
+    assert first == post_id_to_uuid("tweet:123")
+    assert first != post_id_to_uuid("tweet:124")
+    uuid.UUID(first)  # raises unless valid UUID string
