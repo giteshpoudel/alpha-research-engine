@@ -3,8 +3,8 @@ services:
     image: clickhouse/clickhouse-server:25.8
     container_name: alpha-clickhouse
     ports:
-      - "${CLICKHOUSE_PORT:-8123}:8123"
-      - "${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+      - "127.0.0.1:${CLICKHOUSE_PORT:-8123}:8123"
+      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-alpha}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-alpha}
@@ -26,8 +26,8 @@ services:
     image: qdrant/qdrant:v1.19.0
     container_name: alpha-qdrant
     ports:
-      - "${QDRANT_PORT:-6333}:6333"
-      - "${QDRANT_GRPC_PORT:-6334}:6334"
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
+      - "127.0.0.1:${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:

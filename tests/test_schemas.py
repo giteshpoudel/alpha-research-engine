@@ -58,6 +58,7 @@ def test_sentiment_posts_columns(ch_client):
     cols = {r[0]: r[1] for r in rows}
     assert cols["post_id"] == "String"
     assert cols["source"] == "LowCardinality(String)"
+    assert cols["author"] == "String"
     assert cols["text"] == "String"
     assert cols["tickers"] == "Array(String)"
     assert cols["lang"] == "LowCardinality(String)"
@@ -122,9 +123,27 @@ def test_mismatched_vector_size_raises():
     client = Mock()
     client.collection_exists.return_value = True
     client.get_collection.return_value = SimpleNamespace(
-        config=SimpleNamespace(params=SimpleNamespace(vectors=SimpleNamespace(size=512)))
+        config=SimpleNamespace(
+            params=SimpleNamespace(
+                vectors=SimpleNamespace(size=512, distance=Distance.COSINE)
+            )
+        )
     )
     with pytest.raises(RuntimeError, match="vector size"):
+        create_qdrant_schema(client)
+
+
+def test_mismatched_vector_distance_raises():
+    client = Mock()
+    client.collection_exists.return_value = True
+    client.get_collection.return_value = SimpleNamespace(
+        config=SimpleNamespace(
+            params=SimpleNamespace(
+                vectors=SimpleNamespace(size=QDRANT_VECTOR_SIZE, distance=Distance.EUCLID)
+            )
+        )
+    )
+    with pytest.raises(RuntimeError, match="distance"):
         create_qdrant_schema(client)
 
 

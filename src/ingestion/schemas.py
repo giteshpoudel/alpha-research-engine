@@ -21,6 +21,7 @@ def _env(name: str, default: str) -> str:
 
 
 def database_name() -> str:
+    load_dotenv()
     return _env("CLICKHOUSE_DB", "alpha")
 
 
@@ -136,14 +137,19 @@ def create_qdrant_schema(client: QdrantClient) -> None:
     """Create the social_posts collection and payload indexes. Safe to re-run.
 
     Raises RuntimeError if the collection exists with a different vector
-    size — recreating it would silently drop every embedded post.
+    size or distance — recreating it would silently drop every embedded post.
     """
     if client.collection_exists(QDRANT_COLLECTION):
-        existing = client.get_collection(QDRANT_COLLECTION).config.params.vectors.size
-        if existing != QDRANT_VECTOR_SIZE:
+        vectors = client.get_collection(QDRANT_COLLECTION).config.params.vectors
+        if vectors.size != QDRANT_VECTOR_SIZE:
             raise RuntimeError(
-                f"Collection '{QDRANT_COLLECTION}' exists with vector size {existing}, "
+                f"Collection '{QDRANT_COLLECTION}' exists with vector size {vectors.size}, "
                 f"expected {QDRANT_VECTOR_SIZE}. Refusing to recreate (would drop data)."
+            )
+        if vectors.distance != Distance.COSINE:
+            raise RuntimeError(
+                f"Collection '{QDRANT_COLLECTION}' exists with distance {vectors.distance}, "
+                f"expected {Distance.COSINE}. Refusing to recreate (would drop data)."
             )
     else:
         client.create_collection(
