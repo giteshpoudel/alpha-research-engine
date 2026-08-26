@@ -631,7 +631,7 @@ def poll_subreddits(ch_client, http_client: httpx.Client | None = None,
 - [ ] **Step 9: Run to verify pass**
 
 Run: `python -m pytest tests/test_http.py tests/test_reddit.py -v`
-Expected: 4 + 5 tests PASS.
+Expected: 4 + 4 tests PASS.
 
 - [ ] **Step 10: Commit**
 
@@ -782,7 +782,7 @@ _TAG_RE = re.compile(r"<[^>]+>")
 def map_entry(feed_name: str, entry) -> dict | None:
     """Map a feedparser entry to a row dict, or None to skip."""
     title = (entry.get("title") or "").strip()
-    summary = _TAG_RE.sub(" ", entry.get("summary") or "").strip()
+    summary = " ".join(_TAG_RE.sub(" ", entry.get("summary") or "").split())
     text = f"{title}\n{summary}".strip()
     if not text:
         return None
@@ -1395,7 +1395,7 @@ Expected: 3 tests PASS. (Note: `avgIf` over `Nullable(Float32)` returns Float64;
 - [ ] **Step 5: Run the full suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: all tests PASS (18 schema + 6 tickers + 4 http + 5 reddit + 4 rss + 3 scorer + 3 aggregator = 43).
+Expected: all tests PASS (18 schema + 6 tickers + 4 http + 4 reddit + 4 rss + 3 scorer + 3 aggregator = 42).
 
 - [ ] **Step 6: Commit**
 
@@ -1539,7 +1539,7 @@ Expected: 3 tests PASS.
 - [ ] **Step 5: Full suite + live smoke run**
 
 Run: `python -m pytest tests/ -v`
-Expected: all 46 tests PASS.
+Expected: all 45 tests PASS.
 
 Then, with Docker stack and Ollama running, one real cycle against live sources:
 
