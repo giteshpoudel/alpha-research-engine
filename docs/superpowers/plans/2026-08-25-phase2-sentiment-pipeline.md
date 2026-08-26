@@ -1036,12 +1036,15 @@ def _ollama_host() -> str:
 
 
 def _embed(http_client: httpx.Client, texts: list[str]) -> list[list[float]]:
-    resp = http_client.post(
+    # post_with_backoff (from src.ingestion.http) applies the Global
+    # Constraints retry policy to Ollama too: retry transport/429/5xx with
+    # exponential backoff, raise RuntimeError on non-retryable failures.
+    resp = post_with_backoff(
         f"http://{_ollama_host()}:11434/api/embed",
         json={"model": EMBED_MODEL, "input": texts},
+        client=http_client,
         timeout=120.0,
     )
-    resp.raise_for_status()
     return resp.json()["embeddings"]
 
 
