@@ -361,7 +361,7 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `python -m pytest tests/test_schemas.py -v`
-Expected: all 8 tests PASS.
+Expected: all 7 tests PASS (3 parametrized engine checks + 4 single tests).
 
 - [ ] **Step 6: Commit**
 
@@ -449,7 +449,7 @@ def test_post_id_to_uuid_is_deterministic():
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/test_schemas.py -v`
-Expected: the 5 new tests FAIL with `ImportError: cannot import name 'QDRANT_COLLECTION'`; the 8 Task 2 tests still PASS.
+Expected: the whole file fails at collection with `ImportError: cannot import name 'QDRANT_COLLECTION'` (the module-level import aborts collection before any test runs).
 
 - [ ] **Step 3: Implement the Qdrant half of `src/ingestion/schemas.py`**
 
@@ -530,7 +530,7 @@ def create_qdrant_schema(client: QdrantClient) -> None:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/test_schemas.py -v`
-Expected: all 13 tests PASS.
+Expected: all 12 tests PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -578,7 +578,7 @@ def test_main_is_idempotent():
 Run: `python -m pytest tests/test_schemas.py -v`
 Expected: the 3 new tests FAIL with `ImportError: cannot import name 'main'`.
 
-Note on `test_wait_for_services_times_out`: with `timeout=0.0` the deadline is already in the past, so the function must check readiness first and timeout second — the implementation below does exactly that, and this test passes immediately regardless of container state.
+Note on `test_wait_for_services_times_out`: with `timeout=0.0` the deadline is already in the past, so the function must check the deadline first and readiness second — the implementation below does exactly that, and this test passes immediately regardless of container state. (Checking readiness first would return without raising whenever the stack is up — and the stack must be up for the other tests.)
 
 - [ ] **Step 3: Implement the CLI section of `src/ingestion/schemas.py`**
 
@@ -606,13 +606,14 @@ def wait_for_services(timeout: float = 60.0) -> None:
     deadline = time.monotonic() + timeout
     delay = 1.0
     while True:
-        if _clickhouse_ready() and _qdrant_ready():
-            return
+        # Deadline first: timeout=0.0 must raise even when the stack is up.
         if time.monotonic() >= deadline:
             raise RuntimeError(
                 "Timed out waiting for ClickHouse/Qdrant. "
                 "Is the stack running? Try: docker compose up -d"
             )
+        if _clickhouse_ready() and _qdrant_ready():
+            return
         time.sleep(delay)
         delay = min(delay * 2, 10.0)
 
@@ -632,7 +633,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/test_schemas.py -v`
-Expected: all 16 tests PASS.
+Expected: all 15 tests PASS.
 
 - [ ] **Step 5: Verify the CLI end-to-end from the shell**
 
