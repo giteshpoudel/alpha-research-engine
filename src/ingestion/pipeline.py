@@ -20,8 +20,10 @@ from src.ingestion.scorer import score_pending_posts
 
 
 def run_cycle(ch_client=None, qd_client=None) -> dict[str, int]:
-    ch_client = ch_client or get_clickhouse_client()
-    qd_client = qd_client or get_qdrant_client()
+    if ch_client is None:
+        ch_client = get_clickhouse_client()
+    if qd_client is None:
+        qd_client = get_qdrant_client()
     stages = (
         ("reddit", lambda: poll_subreddits(ch_client)),
         ("rss", lambda: poll_feeds(ch_client)),

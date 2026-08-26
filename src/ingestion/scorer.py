@@ -16,6 +16,7 @@ from datetime import timezone
 import httpx
 from qdrant_client.models import PointStruct
 
+from src.ingestion.http import post_with_backoff
 from src.ingestion.schemas import QDRANT_COLLECTION, database_name, post_id_to_uuid
 
 EMBED_MODEL = "nomic-embed-text"
@@ -48,12 +49,12 @@ def _ollama_host() -> str:
 
 
 def _embed(http_client: httpx.Client, texts: list[str]) -> list[list[float]]:
-    resp = http_client.post(
+    resp = post_with_backoff(
         f"http://{_ollama_host()}:11434/api/embed",
         json={"model": EMBED_MODEL, "input": texts},
+        client=http_client,
         timeout=120.0,
     )
-    resp.raise_for_status()
     return resp.json()["embeddings"]
 
 

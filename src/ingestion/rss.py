@@ -75,6 +75,6 @@ def poll_feeds(ch_client, http_client: httpx.Client | None = None,
     for name, url in feeds:
         try:
             inserted += insert_posts(ch_client, fetch_feed(name, url, http_client=http_client))
-        except RuntimeError as exc:
+        except Exception as exc:
             print(f"rss: skipping {name}: {exc}")
     return inserted

@@ -8,6 +8,7 @@ engagement_ratio are scale-consistent.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 
 from src.ingestion.schemas import database_name
@@ -51,7 +52,10 @@ def _window_stats(ch_client, start: datetime, end: datetime) -> dict[str, tuple]
     ).result_rows
     stats = {}
     for ticker, post_count, mean_score, wsum, wtotal, engagement in rows:
-        scored_mean = float(mean_score) if mean_score is not None else 0.0
+        if mean_score is None or (isinstance(mean_score, float) and math.isnan(mean_score)):
+            scored_mean = 0.0
+        else:
+            scored_mean = float(mean_score)
         weighted = float(wsum) / float(wtotal) if wtotal else 0.0
         stats[ticker] = (int(post_count), scored_mean, weighted, int(engagement))
     return stats

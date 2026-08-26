@@ -74,7 +74,7 @@ def poll_subreddits(ch_client, http_client: httpx.Client | None = None,
         for sub in subreddits:
             try:
                 inserted += insert_posts(ch_client, fetch_new_posts(http_client, sub))
-            except RuntimeError as exc:
+            except Exception as exc:
                 print(f"reddit: skipping r/{sub}: {exc}")
     finally:
         if owns_client:

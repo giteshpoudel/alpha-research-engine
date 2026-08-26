@@ -115,7 +115,7 @@ ORDER BY (bucket_size, bucket_start, ticker)
 
 
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
-    """Create the database and all Phase 1 tables. Safe to re-run."""
+    """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL):
@@ -222,7 +222,7 @@ def main() -> None:
     wait_for_services()
     create_clickhouse_schema(get_clickhouse_client())
     create_qdrant_schema(get_qdrant_client())
-    print(f"ClickHouse: database '{database_name()}' ready (ohlcv, funding_rates, sentiment_posts)")
+    print(f"ClickHouse: database '{database_name()}' ready (ohlcv, funding_rates, sentiment_posts, sentiment_metrics)")
     print(f"Qdrant: collection '{QDRANT_COLLECTION}' ready ({QDRANT_VECTOR_SIZE}-dim cosine)")
 
 

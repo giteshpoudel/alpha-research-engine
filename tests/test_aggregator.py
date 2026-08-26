@@ -78,3 +78,24 @@ def test_run_aggregation_writes_recent_buckets(ch_client):
         parameters={"ts": bucket_start},
     ).result_rows
     assert rows and rows[0][0] == 1
+
+
+def test_compute_metrics_unscored_only_bucket(ch_client):
+    bucket_start = datetime(2024, 2, 20, 10, 0, tzinfo=timezone.utc)
+    # only an unscored TEST post: avgIf over zero scored rows yields NaN,
+    # which must be written as 0.0, same as None
+    _seed_post(ch_client, "test:agg-nan", ["TEST"], None, 0, 0,
+               bucket_start + timedelta(minutes=2))
+
+    assert compute_metrics(ch_client, "1h", bucket_start) >= 1
+
+    rows = ch_client.query(
+        f"SELECT mean_score, weighted_score "
+        f"FROM {database_name()}.sentiment_metrics FINAL "
+        "WHERE bucket_size = '1h' AND ticker = 'TEST' AND bucket_start = {ts:DateTime64(3)}",
+        parameters={"ts": bucket_start},
+    ).result_rows
+    assert len(rows) == 1
+    mean_score, weighted_score = rows[0]
+    assert mean_score == 0.0
+    assert weighted_score == 0.0
