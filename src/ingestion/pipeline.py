@@ -1,4 +1,4 @@
-"""Pipeline orchestrator: reddit -> rss -> score -> aggregate.
+"""Pipeline orchestrator: reddit -> rss -> stocktwits -> score -> aggregate.
 
 Usage:
     python -m src.ingestion.pipeline --once          # single cycle
@@ -17,6 +17,7 @@ from src.ingestion.reddit import poll_subreddits
 from src.ingestion.rss import poll_feeds
 from src.ingestion.schemas import get_clickhouse_client, get_qdrant_client
 from src.ingestion.scorer import score_pending_posts
+from src.ingestion.stocktwits import poll_symbols
 
 
 def run_cycle(ch_client=None, qd_client=None) -> dict[str, int]:
@@ -27,6 +28,7 @@ def run_cycle(ch_client=None, qd_client=None) -> dict[str, int]:
     stages = (
         ("reddit", lambda: poll_subreddits(ch_client)),
         ("rss", lambda: poll_feeds(ch_client)),
+        ("stocktwits", lambda: poll_symbols(ch_client)),
         ("score", lambda: score_pending_posts(ch_client, qd_client)),
         ("aggregate", lambda: run_aggregation(ch_client)),
     )
