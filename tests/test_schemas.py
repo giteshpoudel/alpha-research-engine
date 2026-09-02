@@ -192,3 +192,9 @@ def test_wait_for_services_times_out():
 def test_main_is_idempotent():
     main()
     main()  # second run must not raise
+
+
+def test_sentiment_posts_has_label_column(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.sentiment_posts").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["label"] == "Nullable(String)"

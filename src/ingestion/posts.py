@@ -9,7 +9,7 @@ from src.ingestion.schemas import database_name
 SENTIMENT_POST_COLUMNS = (
     "post_id", "source", "author", "text", "tickers", "lang",
     "likes", "retweets", "replies", "url",
-    "published_at", "ingested_at", "sentiment_score",
+    "published_at", "ingested_at", "sentiment_score", "label",
 )
 
 
@@ -37,6 +37,7 @@ def insert_posts(ch_client, rows: list[dict]) -> int:
             row["published_at"] or now,  # documented fallback: dateless RSS items
             now,
             None,
+            row.get("label"),
         ]
         for row in rows
     ]

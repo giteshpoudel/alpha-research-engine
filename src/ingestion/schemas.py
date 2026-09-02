@@ -87,7 +87,8 @@ CREATE TABLE IF NOT EXISTS {db}.sentiment_posts
     url String,
     published_at DateTime64(3),
     ingested_at DateTime64(3),
-    sentiment_score Nullable(Float32)
+    sentiment_score Nullable(Float32),
+    label Nullable(String)
 )
 ENGINE = ReplacingMergeTree
 ORDER BY (source, post_id)
@@ -120,6 +121,10 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL):
         client.command(ddl.format(db=db))
+    # Idempotent column migration for databases created before Phase 2.1.
+    client.command(
+        f"ALTER TABLE {db}.sentiment_posts ADD COLUMN IF NOT EXISTS label Nullable(String)"
+    )
 
 
 QDRANT_COLLECTION = "social_posts"
