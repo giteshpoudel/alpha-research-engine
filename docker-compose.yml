@@ -11,6 +11,11 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
     volumes:
       - clickhouse_data:/var/lib/clickhouse
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ulimits:
       nofile:
         soft: 262144
@@ -30,6 +35,11 @@ services:
       - "127.0.0.1:${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       # qdrant image ships no curl/wget; use bash's /dev/tcp probe
       test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
