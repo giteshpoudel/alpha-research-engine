@@ -375,7 +375,7 @@ def _fetch_pair(http_client: httpx.Client, pair: str, interval: str,
         if not batch:
             break
         out.extend(batch)
-        cursor = batch[-1][0] + 1
+        cursor = batch[-1][0] + _INTERVAL_SECONDS[interval] * 1000
         if len(batch) < _PAGE:
             break
     return out
