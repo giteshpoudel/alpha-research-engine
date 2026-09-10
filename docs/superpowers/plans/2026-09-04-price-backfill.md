@@ -520,7 +520,13 @@ def test_backfill_splits_at_migration(ch_client):
     def handler(req):
         product = req.url.path.split("/products/")[1].split("/")[0]
         requested.append(product)
-        return httpx.Response(200, json=[list(CANDLE)])
+        # Derive the candle ts from the request's start param so each segment
+        # yields a distinct sort key — identical (exchange, symbol, interval, ts)
+        # keys would collapse under ReplacingMergeTree FINAL.
+        start_param = req.url.params["start"]
+        seg_ts = datetime.fromisoformat(start_param)
+        candle = [int(seg_ts.timestamp())] + list(CANDLE[1:])
+        return httpx.Response(200, json=[candle])
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
     start = MATIC_MIGRATION - timedelta_days(1)
