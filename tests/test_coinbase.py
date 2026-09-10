@@ -44,7 +44,8 @@ def test_fetch_candles_reverses_newest_first():
 def ch_client():
     client = get_clickhouse_client()
     yield client
-    client.command(f"ALTER TABLE {database_name()}.ohlcv DELETE WHERE symbol = 'TEST'")
+    client.command(f"ALTER TABLE {database_name()}.ohlcv DELETE WHERE symbol = 'TEST'",
+                   settings={"mutations_sync": 1})
 
 
 def test_backfill_splits_at_migration(ch_client):

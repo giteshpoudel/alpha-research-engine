@@ -18,8 +18,10 @@ def ch_client():
     client = get_clickhouse_client()
     yield client
     db = database_name()
-    client.command(f"ALTER TABLE {db}.sentiment_posts DELETE WHERE startsWith(post_id, 'test:')")
-    client.command(f"ALTER TABLE {db}.sentiment_metrics DELETE WHERE ticker = 'TEST'")
+    client.command(f"ALTER TABLE {db}.sentiment_posts DELETE WHERE startsWith(post_id, 'test:')",
+                   settings={"mutations_sync": 1})
+    client.command(f"ALTER TABLE {db}.sentiment_metrics DELETE WHERE ticker = 'TEST'",
+                   settings={"mutations_sync": 1})
 
 
 def _seed_post(ch, post_id, tickers, score, likes, replies, published_at):

@@ -53,7 +53,8 @@ def test_fetch_funding_pagination_and_next_ts_chain():
 def ch_client():
     client = get_clickhouse_client()
     yield client
-    client.command(f"ALTER TABLE {database_name()}.funding_rates DELETE WHERE symbol = 'TEST'")
+    client.command(f"ALTER TABLE {database_name()}.funding_rates DELETE WHERE symbol = 'TEST'",
+                   settings={"mutations_sync": 1})
 
 
 def test_backfill_funding_inserts_and_resumes(ch_client):

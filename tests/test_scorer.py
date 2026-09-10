@@ -46,7 +46,8 @@ def clients():
     qd = get_qdrant_client()
     yield ch, qd
     ch.command(
-        f"ALTER TABLE {database_name()}.sentiment_posts DELETE WHERE startsWith(post_id, 'test:')"
+        f"ALTER TABLE {database_name()}.sentiment_posts DELETE WHERE startsWith(post_id, 'test:')",
+        settings={"mutations_sync": 1},
     )
     qd.delete(
         collection_name=QDRANT_COLLECTION,

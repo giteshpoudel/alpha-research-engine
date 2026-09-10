@@ -15,8 +15,10 @@ def ch_client():
     client = get_clickhouse_client()
     yield client
     db = database_name()
-    client.command(f"ALTER TABLE {db}.ohlcv DELETE WHERE symbol = 'TEST'")
-    client.command(f"ALTER TABLE {db}.funding_rates DELETE WHERE symbol = 'TEST'")
+    client.command(f"ALTER TABLE {db}.ohlcv DELETE WHERE symbol = 'TEST'",
+                   settings={"mutations_sync": 1})
+    client.command(f"ALTER TABLE {db}.funding_rates DELETE WHERE symbol = 'TEST'",
+                   settings={"mutations_sync": 1})
 
 
 def _ohlcv_row(ts):

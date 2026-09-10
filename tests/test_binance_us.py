@@ -70,7 +70,8 @@ def test_fetch_klines_falls_back_to_usd_pair():
 def ch_client():
     client = get_clickhouse_client()
     yield client
-    client.command(f"ALTER TABLE {database_name()}.ohlcv DELETE WHERE symbol = 'TEST'")
+    client.command(f"ALTER TABLE {database_name()}.ohlcv DELETE WHERE symbol = 'TEST'",
+                   settings={"mutations_sync": 1})
 
 
 def test_backfill_inserts_and_resumes(ch_client):
