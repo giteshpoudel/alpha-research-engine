@@ -114,12 +114,50 @@ ENGINE = ReplacingMergeTree
 ORDER BY (bucket_size, bucket_start, ticker)
 """
 
+# run_id is a deterministic hash of strategy+symbol+params+window+dates, so
+# re-running a backtest collapses to one row (idempotent, no version column).
+_BACKTEST_RUNS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.backtest_runs
+(
+    run_id String,
+    strategy LowCardinality(String),
+    symbol String,
+    interval LowCardinality(String),
+    params_json String,
+    window LowCardinality(String),
+    start_ts DateTime64(3),
+    end_ts DateTime64(3),
+    total_return Float32,
+    sharpe Float32,
+    sortino Float32,
+    max_drawdown Float32,
+    calmar Float32,
+    win_rate Float32,
+    num_trades UInt32,
+    created_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (strategy, symbol, window, run_id)
+"""
+
+_BACKTEST_EQUITY_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.backtest_equity
+(
+    run_id String,
+    ts DateTime64(3),
+    equity Float64
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (run_id, ts)
+"""
+
 
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
-    for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL):
+    for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
+                _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL):
         client.command(ddl.format(db=db))
     # Idempotent column migration for databases created before Phase 2.1.
     client.command(

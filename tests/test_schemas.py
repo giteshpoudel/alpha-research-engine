@@ -198,3 +198,28 @@ def test_sentiment_posts_has_label_column(ch_client):
     rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.sentiment_posts").result_rows
     cols = {r[0]: r[1] for r in rows}
     assert cols["label"] == "Nullable(String)"
+
+
+def test_backtest_results_tables(ch_client):
+    rows = ch_client.query(
+        f"DESCRIBE TABLE {database_name()}.backtest_runs"
+    ).result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["run_id"] == "String"
+    assert cols["strategy"] == "LowCardinality(String)"
+    assert cols["symbol"] == "String"
+    assert cols["interval"] == "LowCardinality(String)"
+    assert cols["params_json"] == "String"
+    assert cols["window"] == "LowCardinality(String)"
+    assert cols["start_ts"] == "DateTime64(3)"
+    assert cols["end_ts"] == "DateTime64(3)"
+    for metric in ("total_return", "sharpe", "sortino", "max_drawdown", "calmar", "win_rate"):
+        assert cols[metric] == "Float32"
+    assert cols["num_trades"] == "UInt32"
+    assert cols["created_at"] == "DateTime64(3)"
+
+    eq = ch_client.query(f"DESCRIBE TABLE {database_name()}.backtest_equity").result_rows
+    eq_cols = {r[0]: r[1] for r in eq}
+    assert eq_cols["run_id"] == "String"
+    assert eq_cols["ts"] == "DateTime64(3)"
+    assert eq_cols["equity"] == "Float64"
