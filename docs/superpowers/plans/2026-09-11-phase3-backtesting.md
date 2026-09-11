@@ -283,7 +283,7 @@ def _time_filter(start, end):
         clauses.append("ts >= {start:DateTime64(3)}")
         params["start"] = start
     if end is not None:
-        clauses.append("ts <= {end:DateTime64(3)}")
+        clauses.append("ts < {end:DateTime64(3)}")
         params["end"] = end
     return (" AND " + " AND ".join(clauses)) if clauses else "", params
 
