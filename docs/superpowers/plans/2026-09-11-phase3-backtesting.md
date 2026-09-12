@@ -455,12 +455,17 @@ MR_DEFAULTS = {"window": 24, "z_entry": -2.0, "z_exit": 0.0}
 
 def signals(close: pd.Series, window: int = 24,
             z_entry: float = -2.0, z_exit: float = 0.0) -> tuple[pd.Series, pd.Series]:
-    """Enter when z crosses below z_entry; exit when z crosses above z_exit."""
+    """Enter when z crosses to at-or-below z_entry; exit when z crosses to at-or-above z_exit.
+
+    The ~(prev <=/>= threshold) form is used instead of prev >/< threshold so a
+    NaN previous z (any all-flat rolling window gives std=0) doesn't swallow the
+    crossing. Identical behavior whenever the previous z is non-NaN.
+    """
     ma = close.rolling(window).mean()
     sd = close.rolling(window).std(ddof=0)
     z = (close - ma) / sd
-    entries = (z <= z_entry) & (z.shift(1) > z_entry)
-    exits = (z >= z_exit) & (z.shift(1) < z_exit)
+    entries = (z <= z_entry) & ~(z.shift(1) <= z_entry)
+    exits = (z >= z_exit) & ~(z.shift(1) >= z_exit)
     return entries.fillna(False).astype(bool), exits.fillna(False).astype(bool)
 ```
 
