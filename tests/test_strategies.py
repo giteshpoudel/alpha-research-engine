@@ -3,7 +3,7 @@ import pandas as pd
 
 from src.backtesting.strategies import mean_reversion, sentiment_momentum
 
-IDX = pd.date_range("2024-01-01", periods=48, freq="1h", tz="UTC")
+IDX = pd.date_range("2024-01-01", periods=72, freq="1h", tz="UTC")
 
 
 def _series(values):
@@ -27,6 +27,17 @@ def test_mean_reversion_no_signal_in_flat_market():
     entries, exits = mean_reversion.signals(close)
     assert not entries.any()
     assert not exits.any()
+
+
+def test_mean_reversion_exit_after_pinned_stretch():
+    # 24 bars at 100 (z=NaN warmup), crash to 80 held flat 24 bars (z=NaN mid-series),
+    # then recovery to 100 — the exit must fire exactly once on recovery.
+    values = [100.0] * 24 + [80.0] * 24 + [100.0] * 24
+    close = _series(values)
+    entries, exits = mean_reversion.signals(close, window=24, z_entry=-2.0, z_exit=0.0)
+    assert entries.sum() == 1
+    assert exits.sum() == 1
+    assert exits.idxmax() > entries.idxmax()
 
 
 def test_sentiment_momentum_gating():
