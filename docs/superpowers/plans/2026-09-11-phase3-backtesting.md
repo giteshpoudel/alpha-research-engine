@@ -867,13 +867,14 @@ def _execute(ch_client, strategy: str, symbol: str, window: str, fee: float):
     if base_strategy == "funding_arb":
         start, end = WINDOWS[window]
         start = max(start, FUNDING_EARLIEST)
-        funding = load_funding(ch_client, symbol, start=start, end=end)
-        funding = slice_window(funding, window)
+        # Load from start unbounded, then slice: loader `end` is exclusive but
+        # WINDOWS ends are inclusive candle timestamps (boundary convention).
+        funding = slice_window(load_funding(ch_client, symbol, start=start), window)
         result = run_funding_backtest(funding, fee=fee)
         params = {"threshold": 0.0001}
     elif base_strategy == "sentiment_momentum":
         start, end = WINDOWS["PRELIM"]
-        prices = load_ohlcv(ch_client, symbol, start=start, end=end)["close"]
+        prices = slice_window(load_ohlcv(ch_client, symbol, start=start)["close"], "PRELIM")
         sentiment = load_sentiment(ch_client, symbol)["weighted_score"]
         entries, exits = sentiment_momentum.signals(prices, sentiment, **sentiment_momentum.SM_DEFAULTS)
         result = run_signal_backtest(prices, entries, exits, fee=fee)
@@ -881,7 +882,7 @@ def _execute(ch_client, strategy: str, symbol: str, window: str, fee: float):
         window = "PRELIM"
     else:
         start, end = WINDOWS[window]
-        prices = load_ohlcv(ch_client, symbol, start=start, end=end)["close"]
+        prices = slice_window(load_ohlcv(ch_client, symbol, start=start)["close"], window)
         entries, exits = mean_reversion.signals(prices, **mean_reversion.MR_DEFAULTS)
         result = run_signal_backtest(prices, entries, exits, fee=fee)
         params = dict(mean_reversion.MR_DEFAULTS)
