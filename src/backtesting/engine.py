@@ -1,6 +1,7 @@
 """Backtest engine: VectorBT execution + one shared metrics implementation.
 
-Metrics are computed from equity curves and per-trade PnL lists -- never
+Metrics are computed from equity curves (or an explicit per-bar returns
+series for the additive funding path) and per-trade PnL lists -- never
 from VectorBT's stats API, so both backtest kinds share identical math.
 Annualization assumes 1h bars (8760 periods/year). Undefined metrics
 (zero variance, zero drawdown, no trades) return 0.0, never NaN/inf.
@@ -29,17 +30,24 @@ class BacktestResult:
     equity_curve: pd.Series
 
 
+STD_EPS = 1e-12  # below this, std/downside-std are treated as zero
+
+
 def _metrics(equity: pd.Series, trade_pnls: list[float],
+             returns: pd.Series | None = None,
              total_return: float | None = None) -> BacktestResult:
-    returns = equity.pct_change().dropna()
+    if returns is None:
+        returns = equity.pct_change().dropna()
     if total_return is None:
         total_return = float(equity.iloc[-1] / equity.iloc[0] - 1.0)
 
     std = float(returns.std(ddof=0))
-    sharpe = float(returns.mean() / std * math.sqrt(PERIODS_PER_YEAR)) if std > 0 else 0.0
+    sharpe = (float(returns.mean() / std * math.sqrt(PERIODS_PER_YEAR))
+              if std > STD_EPS else 0.0)
     downside = returns[returns < 0]
     dstd = float(downside.std(ddof=0)) if len(downside) > 0 else 0.0
-    sortino = float(returns.mean() / dstd * math.sqrt(PERIODS_PER_YEAR)) if dstd > 0 else 0.0
+    sortino = (float(returns.mean() / dstd * math.sqrt(PERIODS_PER_YEAR))
+               if dstd > STD_EPS else 0.0)
 
     drawdown = equity / equity.cummax() - 1.0
     max_dd = float(drawdown.min())
@@ -74,18 +82,25 @@ def run_funding_backtest(funding: pd.Series, threshold: float = 0.0001,
                          fee: float = 0.001) -> BacktestResult:
     """Funding-rate carry simulation (short perp + long spot).
 
-    Per-bar return = funding rate while positioned; each position flip costs
-    2 * fee (two legs), including entry when positioned at the window start.
-    The equity curve compounds per-bar returns (so a flat funding rate yields
-    zero-variance returns), while total_return is the arithmetic accrual
-    sum(pnl). Basis risk assumed zero (documented approximation).
+    Per-bar PnL = funding rate while positioned, on fixed notional; each
+    position flip costs 2 * fee (two legs), with entry charged at the window
+    start when the series opens positioned. The equity curve is additive,
+    equity = 1 + cumsum(pnl), anchored at 1.0 one bar before the window, so
+    total_return == equity.iloc[-1] / equity.iloc[0] - 1 == sum(pnl) exactly.
+    Sharpe/sortino are computed from the additive per-bar PnL series (with an
+    epsilon zero-variance guard), and max drawdown from the additive curve.
+    Basis risk assumed zero (documented approximation).
     """
     positioned = funding > threshold
     pos = positioned.astype(int)
     flips = pos.diff().fillna(pos.iloc[0]).abs()
     cost = flips * 2.0 * fee
     pnl = funding.where(positioned, 0.0) - cost
-    equity = ((1.0 + pnl).cumprod()).rename("equity")
+    equity = (1.0 + pnl.cumsum()).rename("equity")
+    step = (funding.index[1] - funding.index[0]) if len(funding) > 1 \
+        else pd.Timedelta(hours=1)
+    anchor = pd.Series([1.0], index=[funding.index[0] - step])
+    equity = pd.concat([anchor, equity])
 
     trade_pnls: list[float] = []
     in_position = False
@@ -102,4 +117,5 @@ def run_funding_backtest(funding: pd.Series, threshold: float = 0.0001,
             trade_pnls.append(accrual)
     if in_position:
         trade_pnls.append(accrual)  # open position closed at window end
-    return _metrics(equity, trade_pnls, total_return=float(pnl.sum()))
+    return _metrics(equity, trade_pnls, returns=pnl,
+                    total_return=float(pnl.sum()))

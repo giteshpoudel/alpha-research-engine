@@ -55,3 +55,21 @@ def test_funding_backtest_fees_and_undefined_metrics():
     flat_result = run_funding_backtest(flat, threshold=0.0005, fee=0.0)
     assert flat_result.sharpe == 0.0
     assert flat_result.num_trades == 1
+
+
+def test_funding_flat_series_sharpe_zero_at_any_rate():
+    # flat funding at 0.003/bar: eps guard must catch near-zero float std
+    flat = pd.Series([0.003] * 10, index=IDX[:10])
+    result = run_funding_backtest(flat, threshold=0.0005, fee=0.0)
+    assert result.sharpe == 0.0
+
+
+def test_funding_total_return_matches_equity_curve():
+    rates = [0.001] * 6 + [0.00001] * 4
+    funding = pd.Series(rates, index=IDX[:10])
+    result = run_funding_backtest(funding, threshold=0.0005, fee=0.001)
+    assert result.equity_curve.iloc[0] == 1.0
+    assert result.total_return == pytest.approx(
+        result.equity_curve.iloc[-1] / result.equity_curve.iloc[0] - 1,
+        rel=1e-9,
+    )
