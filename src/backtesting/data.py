@@ -38,20 +38,43 @@ def _utc_index(values) -> pd.DatetimeIndex:
     return idx
 
 
+def _pick_ohlcv_exchange(ch_client, symbol: str) -> str:
+    """Single exchange for a symbol, preferring binance_us over coinbase."""
+    rows = ch_client.query(
+        f"SELECT DISTINCT exchange FROM {database_name()}.ohlcv "
+        "WHERE symbol = {s:String}",
+        parameters={"s": symbol},
+    ).result_rows
+    available = {r[0] for r in rows}
+    for preferred in ("binance_us", "coinbase"):
+        if preferred in available:
+            return preferred
+    return ""
+
+
 def load_ohlcv(ch_client, symbol: str, interval: str = "1h",
                start: datetime | None = None, end: datetime | None = None) -> pd.DataFrame:
+    """Load OHLCV for one symbol from a single exchange.
+
+    If the symbol exists on multiple exchanges, binance_us is preferred over
+    coinbase; only rows from that one exchange are returned. ``end`` is
+    exclusive.
+    """
     tf, params = _time_filter(start, end)
     params["s"] = symbol
     params["i"] = interval
+    params["e"] = _pick_ohlcv_exchange(ch_client, symbol)
     rows = ch_client.query(
         f"SELECT ts, open, high, low, close, volume FROM {database_name()}.ohlcv FINAL "
-        f"WHERE symbol = {{s:String}} AND interval = {{i:String}}{tf} ORDER BY ts",
+        f"WHERE symbol = {{s:String}} AND interval = {{i:String}} AND exchange = {{e:String}}{tf} ORDER BY ts",
         parameters=params,
     ).result_rows
     if not rows:
         raise ValueError(f"no ohlcv data for {symbol} {interval} in [{start}, {end}]")
     df = pd.DataFrame(rows, columns=["ts", "open", "high", "low", "close", "volume"])
     df.index = _utc_index(df.pop("ts"))
+    if not df.index.is_unique:
+        raise ValueError(f"duplicate timestamps for {symbol} {interval} ohlcv — exchange scoping failed")
     return df
 
 
@@ -59,15 +82,19 @@ def load_funding(ch_client, symbol: str,
                  start: datetime | None = None, end: datetime | None = None) -> pd.Series:
     tf, params = _time_filter(start, end)
     params["s"] = symbol
+    params["e"] = "hyperliquid"
     rows = ch_client.query(
         f"SELECT ts, funding_rate FROM {database_name()}.funding_rates FINAL "
-        f"WHERE symbol = {{s:String}}{tf} ORDER BY ts",
+        f"WHERE symbol = {{s:String}} AND exchange = {{e:String}}{tf} ORDER BY ts",
         parameters=params,
     ).result_rows
     if not rows:
         raise ValueError(f"no funding data for {symbol} in [{start}, {end}]")
     idx = _utc_index([r[0] for r in rows])
-    return pd.Series([float(r[1]) for r in rows], index=idx, name="funding_rate")
+    series = pd.Series([float(r[1]) for r in rows], index=idx, name="funding_rate")
+    if not series.index.is_unique:
+        raise ValueError(f"duplicate timestamps for {symbol} funding — exchange scoping failed")
+    return series
 
 
 def load_sentiment(ch_client, symbol: str, bucket: str = "1h") -> pd.DataFrame:
