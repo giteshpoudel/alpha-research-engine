@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Alpha Research Dashboard{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <!-- CDN note: if you run fully offline, download chart.js into static/ and update this tag -->
+</head>
+<body>
+<nav>
+  <span class="brand">Alpha Research</span>
+  <a href="/" class="active">Backtesting</a>
+  <span class="disabled" title="coming in a later iteration">Paper Trading</span>
+  <span class="disabled" title="coming in a later iteration">Live Trading</span>
+</nav>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

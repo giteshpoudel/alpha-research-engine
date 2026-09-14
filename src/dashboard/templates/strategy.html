@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ strategy }} · Alpha Research{% endblock %}
+{% block content %}
+<h1>{{ strategy }}</h1>
+<table>
+  <thead>
+    <tr>
+      <th rowspan="2">Symbol</th>
+      {% for w in windows %}<th colspan="4" class="{{ 'prelim' if w == 'PRELIM' }}">{{ w }}</th>{% endfor %}
+    </tr>
+    <tr>
+      {% for w in windows %}
+      <th>Sharpe</th><th>Return</th><th>MaxDD</th><th>Win Rate</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for symbol, per_window in symbols.items() %}
+    <tr>
+      <td>{{ symbol }}</td>
+      {% for w in windows %}
+        {% set row = per_window.get(w) %}
+        {% if row %}
+        <td>{{ row.avg_sharpe }}</td><td>{{ row.avg_total_return }}</td>
+        <td>{{ row.avg_max_drawdown }}</td><td>{{ row.avg_win_rate }}</td>
+        {% else %}
+        <td colspan="4" class="muted">—</td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

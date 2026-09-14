@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ run.strategy }} {{ run.symbol }} {{ run.window }} · Alpha Research{% endblock %}
+{% block content %}
+<h1>{{ run.strategy }} · {{ run.symbol }}
+  <span class="tag {{ 'prelim' if run.window == 'PRELIM' }}">{{ run.window }}</span></h1>
+<div class="cards">
+  <div class="card"><span>Total Return</span><b>{{ "%.3f"|format(run.total_return) }}</b></div>
+  <div class="card"><span>Sharpe</span><b>{{ "%.3f"|format(run.sharpe) }}</b></div>
+  <div class="card"><span>Sortino</span><b>{{ "%.3f"|format(run.sortino) }}</b></div>
+  <div class="card"><span>Max Drawdown</span><b>{{ "%.3f"|format(run.max_drawdown) }}</b></div>
+  <div class="card"><span>Calmar</span><b>{{ "%.3f"|format(run.calmar) }}</b></div>
+  <div class="card"><span>Win Rate</span><b>{{ "%.3f"|format(run.win_rate) }}</b></div>
+  <div class="card"><span>Trades</span><b>{{ run.num_trades }}</b></div>
+  <div class="card"><span>Run</span><b class="mono">{{ run.run_id }}</b></div>
+</div>
+<div class="chart-wrap"><canvas id="equity-chart"></canvas></div>
+<script>
+  const points = {{ points | tojson }};
+  new Chart(document.getElementById("equity-chart"), {
+    type: "line",
+    data: {
+      labels: points.map(p => p.ts),
+      datasets: [{
+        label: "Equity",
+        data: points.map(p => p.equity),
+        borderColor: "#4fc3f7",
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.1,
+      }],
+    },
+    options: {
+      animation: false,
+      scales: {
+        x: { ticks: { maxTicksLimit: 10, color: "#8892a0" }, grid: { color: "#232a35" } },
+        y: { ticks: { color: "#8892a0" }, grid: { color: "#232a35" } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+</script>
+{% endblock %}

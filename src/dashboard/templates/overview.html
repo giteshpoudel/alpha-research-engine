@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Backtesting · Alpha Research{% endblock %}
+{% block content %}
+<h1>Backtesting overview</h1>
+<table>
+  <thead>
+    <tr>
+      <th>Strategy</th><th>Window</th><th>Runs</th><th>Avg Sharpe</th>
+      <th>Avg Sortino</th><th>Avg MaxDD</th><th>Avg Return</th><th>Avg Win Rate</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr class="{{ 'prelim' if row.window == 'PRELIM' }}">
+      <td><a href="/strategies/{{ row.strategy }}">{{ row.strategy }}</a></td>
+      <td>{{ row.window }}{% if row.window == 'PRELIM' %} <span class="tag">prelim</span>{% endif %}</td>
+      <td>{{ row.runs }}</td>
+      <td>{{ row.avg_sharpe }}</td>
+      <td>{{ row.avg_sortino }}</td>
+      <td>{{ row.avg_max_drawdown }}</td>
+      <td>{{ row.avg_total_return }}</td>
+      <td>{{ row.avg_win_rate }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
