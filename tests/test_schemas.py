@@ -223,3 +223,20 @@ def test_backtest_results_tables(ch_client):
     assert eq_cols["run_id"] == "String"
     assert eq_cols["ts"] == "DateTime64(3)"
     assert eq_cols["equity"] == "Float64"
+
+
+def test_tuned_params_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.tuned_params").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["strategy"] == "LowCardinality(String)"
+    assert cols["symbol"] == "String"
+    assert cols["params_json"] == "String"
+    assert cols["train_sharpe"] == "Float32"
+    assert cols["validation_sharpe"] == "Float32"
+    assert cols["folds"] == "UInt8"
+    assert cols["tuned_at"] == "DateTime64(3)"
+    engine = ch_client.query(
+        "SELECT engine FROM system.tables WHERE database = {db:String} AND name = 'tuned_params'",
+        parameters={"db": database_name()},
+    ).result_rows
+    assert "ReplacingMergeTree" in engine[0][0]

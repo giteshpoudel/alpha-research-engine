@@ -151,13 +151,29 @@ ENGINE = ReplacingMergeTree
 ORDER BY (run_id, ts)
 """
 
+# One row per (strategy, symbol): re-tuning replaces it.
+_TUNED_PARAMS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.tuned_params
+(
+    strategy LowCardinality(String),
+    symbol String,
+    params_json String,
+    train_sharpe Float32,
+    validation_sharpe Float32,
+    folds UInt8,
+    tuned_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (strategy, symbol)
+"""
+
 
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
-                _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL):
+                _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL):
         client.command(ddl.format(db=db))
     # Idempotent column migration for databases created before Phase 2.1.
     client.command(
