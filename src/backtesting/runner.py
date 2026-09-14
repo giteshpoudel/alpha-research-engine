@@ -80,16 +80,16 @@ def _execute(ch_client, strategy: str, symbol: str, window: str, fee: float):
     return json.dumps(params), equity.index[0].to_pydatetime(), equity.index[-1].to_pydatetime(), result, window
 
 
-def run_backtest(ch_client, strategy: str, symbol: str, window: str,
-                 fee: float = DEFAULT_FEE) -> str:
-    """Run one (strategy, symbol, window) backtest and store results. Returns run_id."""
-    params_json, start_ts, end_ts, result, window = _execute(ch_client, strategy, symbol, window, fee)
-    run_id = compute_run_id(strategy, symbol, "1h", params_json, window, start_ts, end_ts)
+def store_result(ch_client, strategy: str, symbol: str, interval: str,
+                 params_json: str, window: str, start_ts: datetime,
+                 end_ts: datetime, result) -> str:
+    """Compute run_id and insert one backtest_runs row plus equity rows. Returns run_id."""
+    run_id = compute_run_id(strategy, symbol, interval, params_json, window, start_ts, end_ts)
     now = datetime.now(timezone.utc)
     db = database_name()
     ch_client.insert(
         f"{db}.backtest_runs",
-        [[run_id, strategy, symbol, "1h", params_json, window, start_ts, end_ts,
+        [[run_id, strategy, symbol, interval, params_json, window, start_ts, end_ts,
           result.total_return, result.sharpe, result.sortino, result.max_drawdown,
           result.calmar, result.win_rate, result.num_trades, now]],
         column_names=list(_RUN_COLUMNS),
@@ -103,6 +103,14 @@ def run_backtest(ch_client, strategy: str, symbol: str, window: str,
         column_names=["run_id", "ts", "equity"],
     )
     return run_id
+
+
+def run_backtest(ch_client, strategy: str, symbol: str, window: str,
+                 fee: float = DEFAULT_FEE) -> str:
+    """Run one (strategy, symbol, window) backtest and store results. Returns run_id."""
+    params_json, start_ts, end_ts, result, window = _execute(ch_client, strategy, symbol, window, fee)
+    return store_result(ch_client, strategy, symbol, "1h", params_json, window,
+                        start_ts, end_ts, result)
 
 
 def main(argv: list[str] | None = None) -> None:
