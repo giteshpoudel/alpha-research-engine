@@ -31,13 +31,6 @@ def ch_client():
     )
 
 
-def _stored_run_ids(ch_client):
-    rows = ch_client.query(
-        f"SELECT run_id FROM {database_name()}.backtest_runs FINAL WHERE strategy LIKE 'TEST%'"
-    ).result_rows
-    return {r[0] for r in rows}
-
-
 def test_run_variant_stores_variant_and_distinct_ids(ch_client):
     rid_tuned = run_variant(ch_client, "TEST_mean_reversion", "BTC", "tuned", MR_PARAMS)
     rid_static = run_variant(ch_client, "TEST_mean_reversion", "BTC", "static", MR_PARAMS)
@@ -63,12 +56,12 @@ def test_run_allocator_causal_composite(ch_client):
         column_names=["strategy", "symbol", "params_json", "train_sharpe",
                       "validation_sharpe", "folds", "tuned_at"],
     )
-    rid = run_allocator(ch_client, "BTC")
+    rid = run_allocator(ch_client, "BTC", strategy="TEST_allocator")
     rows = ch_client.query(
         f"SELECT strategy, params_json FROM {database_name()}.backtest_runs FINAL "
         "WHERE run_id = {r:String}", parameters={"r": rid},
     ).result_rows
-    assert rows[0][0] == "allocator"
+    assert rows[0][0] == "TEST_allocator"
     assert json.loads(rows[0][1])["variant"] == "allocator"
     eq = ch_client.query(
         f"SELECT count() FROM {database_name()}.backtest_equity FINAL "

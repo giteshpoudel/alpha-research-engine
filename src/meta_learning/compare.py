@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -69,17 +70,20 @@ def _segment_return(result: BacktestResult) -> float:
     return result.total_return
 
 
-def run_allocator(ch_client, symbol: str, fee: float = DEFAULT_FEE) -> str:
+def run_allocator(ch_client, symbol: str, fee: float = DEFAULT_FEE,
+                  strategy: str = "allocator") -> str:
     """Causal composite: at each rebalance, run the strategy with the best
     trailing-30-day return (computed strictly from data before the rebalance
-    point). Stored as strategy 'allocator' with variant 'allocator'."""
+    point). Stored under `strategy` with variant 'allocator'. When `strategy`
+    is TEST_-prefixed, tuned params are read from the TEST_-prefixed strategy
+    rows so tests stay isolated from production data."""
+    test_run = strategy.startswith("TEST_")
+    prefix = "TEST_" if test_run else ""
     oos_start, _ = WINDOWS["OOS"]
     prices = slice_window(load_ohlcv(ch_client, symbol, start=oos_start)["close"], "OOS")
     funding = slice_window(load_funding(ch_client, symbol, start=oos_start), "OOS")
-    mr_params = _tuned_params(ch_client, "TEST_mean_reversion", symbol) if _has_test_params(ch_client) \
-        else _tuned_params(ch_client, "mean_reversion", symbol)
-    fa_params = _tuned_params(ch_client, "TEST_funding_arb", symbol) if _has_test_params(ch_client) \
-        else _tuned_params(ch_client, "funding_arb", symbol)
+    mr_params = _tuned_params(ch_client, f"{prefix}mean_reversion", symbol)
+    fa_params = _tuned_params(ch_client, f"{prefix}funding_arb", symbol)
 
     oos_end = prices.index[-1].to_pydatetime()
     equity_points: dict[pd.Timestamp, float] = {}
@@ -117,21 +121,18 @@ def run_allocator(ch_client, symbol: str, fee: float = DEFAULT_FEE) -> str:
 
     equity = pd.Series(equity_points).sort_index()
     result = _metrics(equity, segment_pnls)
+    bad = ([(str(ts), v) for ts, v in equity_points.items() if not math.isfinite(v)]
+           + [(f"segment_{i}", v) for i, v in enumerate(segment_pnls) if not math.isfinite(v)])
+    if bad:
+        raise ValueError(f"allocator {symbol}: non-finite values, refusing to store: {bad}")
     start_ts = equity.index[0].to_pydatetime()
     end_ts = equity.index[-1].to_pydatetime()
     params_json = json.dumps({
         "variant": "allocator", "rebalance_days": _REBALANCE_DAYS,
         "trailing_days": _TRAILING_DAYS,
     })
-    return store_result(ch_client, "allocator", symbol, "1h", params_json, "OOS",
+    return store_result(ch_client, strategy, symbol, "1h", params_json, "OOS",
                         start_ts, end_ts, result)
-
-
-def _has_test_params(ch_client) -> bool:
-    rows = ch_client.query(
-        f"SELECT count() FROM {database_name()}.tuned_params FINAL WHERE startsWith(strategy, 'TEST_')"
-    ).result_rows
-    return rows[0][0] > 0
 
 
 def main(argv: list[str] | None = None) -> None:
