@@ -44,9 +44,10 @@ def walk_forward_folds() -> list[tuple[datetime, datetime, datetime, datetime]]:
         start = _add_months(start, _STEP_MONTHS)
     # Guardrail #1 tripwire: every bound must sit inside the IS window.
     for train_start, train_end, val_start, val_end in folds:
-        assert train_start >= WINDOWS["IS"][0] and val_end <= _IS_END_EXCLUSIVE, (
-            f"fold escapes IS window: {(train_start, train_end, val_start, val_end)}"
-        )
+        if not (train_start >= WINDOWS["IS"][0] and val_end <= _IS_END_EXCLUSIVE):
+            raise ValueError(
+                f"fold escapes IS window: {(train_start, train_end, val_start, val_end)}"
+            )
     return folds
 
 
@@ -82,26 +83,33 @@ def tune(ch_client, strategy: str, symbol: str, n_trials: int = 60,
     folds = walk_forward_folds()
     fold_params, fold_train_sharpes, fold_val_sharpes = [], [], []
     for train_start, _, val_start, val_end in folds:
-        train_data = _load_train_data(ch_client, base_strategy, symbol, train_start, val_start)
-        val_data = _load_train_data(ch_client, base_strategy, symbol, val_start, val_end)
-        study = optuna.create_study(
-            direction="maximize", sampler=optuna.samplers.TPESampler(seed=seed)
-        )
-        study.optimize(
-            lambda trial: _run(train_data, base_strategy, _suggest(trial, base_strategy), fee).sharpe,
-            n_trials=n_trials,
-        )
+        try:
+            train_data = _load_train_data(ch_client, base_strategy, symbol, train_start, val_start)
+            val_data = _load_train_data(ch_client, base_strategy, symbol, val_start, val_end)
+            study = optuna.create_study(
+                direction="maximize", sampler=optuna.samplers.TPESampler(seed=seed)
+            )
+            study.optimize(
+                lambda trial: _run(train_data, base_strategy, _suggest(trial, base_strategy), fee).sharpe,
+                n_trials=n_trials,
+            )
+        except ValueError as exc:
+            print(f"{strategy} {symbol}: skipping fold "
+                  f"{train_start.date()}->{val_end.date()}: {exc}")
+            continue
         params = dict(study.best_params)
         fold_params.append(params)
         fold_train_sharpes.append(float(study.best_value))
         fold_val_sharpes.append(float(_run(val_data, base_strategy, params, fee).sharpe))
 
-    best = max(range(len(folds)), key=lambda i: fold_val_sharpes[i])
+    if not fold_params:
+        raise ValueError(f"no tunable folds for {strategy} {symbol}")
+    best = max(range(len(fold_params)), key=lambda i: fold_val_sharpes[i])
     record = {
         "params": fold_params[best],
         "train_sharpe": fold_train_sharpes[best],
         "validation_sharpe": sum(fold_val_sharpes) / len(fold_val_sharpes),
-        "folds": len(folds),
+        "folds": len(fold_params),
     }
     ch_client.insert(
         f"{database_name()}.tuned_params",

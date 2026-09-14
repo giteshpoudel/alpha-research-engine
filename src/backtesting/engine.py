@@ -3,8 +3,10 @@
 Metrics are computed from equity curves (or an explicit per-bar returns
 series for the additive funding path) and per-trade PnL lists -- never
 from VectorBT's stats API, so both backtest kinds share identical math.
-Annualization assumes 1h bars (8760 periods/year). Undefined metrics
-(zero variance, zero drawdown, no trades) return 0.0, never NaN/inf.
+Annualization defaults to 1h bars (8760 periods/year) but is derived from
+the equity index spacing when the caller does not pass periods_per_year.
+Undefined metrics (zero variance, zero drawdown, no trades) return 0.0,
+never NaN/inf.
 """
 
 from __future__ import annotations
@@ -33,27 +35,40 @@ class BacktestResult:
 STD_EPS = 1e-12  # below this, std/downside-std are treated as zero
 
 
+def _derive_periods_per_year(index: pd.DatetimeIndex) -> float:
+    """Periods/year from median index spacing (hourly -> 8760, 7-day -> ~52)."""
+    if len(index) < 2:
+        return float(PERIODS_PER_YEAR)
+    median_hours = index.to_series().diff().dropna().median().total_seconds() / 3600.0
+    if median_hours <= 0:
+        return float(PERIODS_PER_YEAR)
+    return PERIODS_PER_YEAR / median_hours
+
+
 def _metrics(equity: pd.Series, trade_pnls: list[float],
              returns: pd.Series | None = None,
-             total_return: float | None = None) -> BacktestResult:
+             total_return: float | None = None,
+             periods_per_year: float | None = None) -> BacktestResult:
     if returns is None:
         returns = equity.pct_change().dropna()
     if total_return is None:
         total_return = float(equity.iloc[-1] / equity.iloc[0] - 1.0)
+    if periods_per_year is None:
+        periods_per_year = _derive_periods_per_year(equity.index)
 
     std = float(returns.std(ddof=0))
-    sharpe = (float(returns.mean() / std * math.sqrt(PERIODS_PER_YEAR))
+    sharpe = (float(returns.mean() / std * math.sqrt(periods_per_year))
               if std > STD_EPS else 0.0)
     downside = returns[returns < 0]
     dstd = float(downside.std(ddof=0)) if len(downside) > 0 else 0.0
-    sortino = (float(returns.mean() / dstd * math.sqrt(PERIODS_PER_YEAR))
+    sortino = (float(returns.mean() / dstd * math.sqrt(periods_per_year))
                if dstd > STD_EPS else 0.0)
 
     drawdown = equity / equity.cummax() - 1.0
     max_dd = float(drawdown.min())
     n = len(returns)
     if n > 0 and total_return > -1.0:
-        annualized = (1.0 + total_return) ** (PERIODS_PER_YEAR / n) - 1.0
+        annualized = (1.0 + total_return) ** (periods_per_year / n) - 1.0
     else:
         annualized = -1.0
     calmar = float(annualized / abs(max_dd)) if max_dd < 0 else 0.0

@@ -50,3 +50,18 @@ def test_tune_stores_tuned_params():
             f"ALTER TABLE {database_name()}.tuned_params DELETE WHERE strategy = 'TEST_mean_reversion'",
             settings={"mutations_sync": 1},
         )
+
+
+def test_tune_funding_arb_skips_dataless_folds():
+    ch = get_clickhouse_client()
+    try:
+        result = tune(ch, "TEST_funding_arb", "BTC", n_trials=3, seed=42)
+        assert result["folds"] < 8  # early folds skipped (no funding data before 2023-05-12)
+        assert result["folds"] >= 1
+        assert "threshold" in result["params"]
+        assert 1e-5 <= result["params"]["threshold"] <= 1e-3
+    finally:
+        ch.command(
+            f"ALTER TABLE {database_name()}.tuned_params DELETE WHERE strategy = 'TEST_funding_arb'",
+            settings={"mutations_sync": 1},
+        )

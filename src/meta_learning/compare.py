@@ -86,7 +86,7 @@ def run_allocator(ch_client, symbol: str, fee: float = DEFAULT_FEE,
     fa_params = _tuned_params(ch_client, f"{prefix}funding_arb", symbol)
 
     oos_end = prices.index[-1].to_pydatetime()
-    equity_points: dict[pd.Timestamp, float] = {}
+    equity_points: dict[pd.Timestamp, float] = {pd.Timestamp(oos_start): 1.0}
     composite = 1.0
     segment_pnls: list[float] = []
     for win_start, win_end in allocator_windows(oos_start, oos_end, _REBALANCE_DAYS):

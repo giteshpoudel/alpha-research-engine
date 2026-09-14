@@ -68,3 +68,30 @@ def test_run_allocator_causal_composite(ch_client):
         "WHERE run_id = {r:String}", parameters={"r": rid},
     ).result_rows
     assert eq[0][0] > 0
+
+
+def test_allocator_metrics_use_segment_frequency(ch_client):
+    # Seed tuned params the allocator reads (TEST_-prefixed strategy names)
+    from datetime import datetime, timezone
+    ch_client.insert(
+        f"{database_name()}.tuned_params",
+        [["TEST_mean_reversion", "BTC", json.dumps(MR_PARAMS), 1.0, 1.0, 8,
+          datetime.now(timezone.utc)],
+         ["TEST_funding_arb", "BTC", json.dumps(FA_PARAMS), 1.0, 1.0, 8,
+          datetime.now(timezone.utc)]],
+        column_names=["strategy", "symbol", "params_json", "train_sharpe",
+                      "validation_sharpe", "folds", "tuned_at"],
+    )
+    rid = run_allocator(ch_client, "BTC", strategy="TEST_allocator")
+    row = ch_client.query(
+        f"SELECT total_return, sharpe FROM {database_name()}.backtest_runs FINAL WHERE run_id = {{r:String}}",
+        parameters={"r": rid},
+    ).result_rows[0]
+    equity = ch_client.query(
+        f"SELECT equity FROM {database_name()}.backtest_equity FINAL WHERE run_id = {{r:String}} ORDER BY ts",
+        parameters={"r": rid},
+    ).result_rows
+    assert equity[0][0] == 1.0  # anchored: first segment's PnL is included
+    ratio = equity[-1][0] / equity[0][0] - 1.0
+    assert row[0] == pytest.approx(ratio, rel=1e-6)  # total_return matches the curve
+    assert abs(row[1]) < 100  # sanity: no 13x annualization inflation
