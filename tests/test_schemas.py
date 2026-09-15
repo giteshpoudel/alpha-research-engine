@@ -240,3 +240,13 @@ def test_tuned_params_table(ch_client):
         parameters={"db": database_name()},
     ).result_rows
     assert "ReplacingMergeTree" in engine[0][0]
+
+
+def test_research_reports_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.research_reports").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["report_date"] == "Date"
+    assert cols["section"] == "LowCardinality(String)"
+    assert cols["content"] == "String"
+    assert cols["model"] == "LowCardinality(String)"
+    assert cols["created_at"] == "DateTime64(3)"

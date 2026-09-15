@@ -167,13 +167,27 @@ ENGINE = ReplacingMergeTree
 ORDER BY (strategy, symbol)
 """
 
+# One row per (report_date, section): re-running a day's report replaces it.
+_RESEARCH_REPORTS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.research_reports
+(
+    report_date Date,
+    section LowCardinality(String),
+    content String,
+    model LowCardinality(String),
+    created_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (report_date, section)
+"""
+
 
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
-                _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL):
+                _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL):
         client.command(ddl.format(db=db))
     # Idempotent column migration for databases created before Phase 2.1.
     client.command(
