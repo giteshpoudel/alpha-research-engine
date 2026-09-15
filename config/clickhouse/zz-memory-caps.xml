@@ -1,0 +1,5 @@
+<clickhouse>
+    <!-- Cache caps keep ClickHouse comfortable inside a 4 GiB Colima VM. -->
+    <mark_cache_size>536870912</mark_cache_size>
+    <uncompressed_cache_size>268435456</uncompressed_cache_size>
+</clickhouse>

@@ -11,6 +11,8 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
     volumes:
       - clickhouse_data:/var/lib/clickhouse
+      - ./config/clickhouse/zz-disable-heavy-logs.xml:/etc/clickhouse-server/config.d/zz-disable-heavy-logs.xml:ro
+      - ./config/clickhouse/zz-memory-caps.xml:/etc/clickhouse-server/config.d/zz-memory-caps.xml:ro
     logging:
       driver: json-file
       options:

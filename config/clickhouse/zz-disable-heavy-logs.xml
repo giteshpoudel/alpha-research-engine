@@ -1,0 +1,21 @@
+<clickhouse>
+    <!-- Heavy per-query/system logs disabled: they grew to 80+ GiB and OOM'd the VM.
+         TTLs keep the remaining system logs bounded. -->
+    <trace_log remove="true"/>
+    <text_log remove="true"/>
+    <query_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </query_log>
+    <metric_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </metric_log>
+    <asynchronous_metric_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </asynchronous_metric_log>
+    <part_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </part_log>
+    <processors_profile_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </processors_profile_log>
+</clickhouse>
