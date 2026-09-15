@@ -181,13 +181,74 @@ ENGINE = ReplacingMergeTree
 ORDER BY (report_date, section)
 """
 
+# Paper trading (forward simulation): one equity row per (strategy, symbol, bar),
+# so re-running replay/forward collapses to the same row (idempotent).
+_PAPER_EQUITY_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.paper_equity
+(
+    strategy LowCardinality(String),
+    symbol String,
+    ts DateTime64(3),
+    equity Float64,
+    cash Float64,
+    position_value Float64,
+    mark_price Float64,
+    status LowCardinality(String),
+    created_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (strategy, symbol, ts)
+"""
+
+# trade_id is a hash of strategy+symbol+ts+side, so re-processing a bar is a
+# no-op instead of a duplicate trade.
+_PAPER_TRADES_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.paper_trades
+(
+    trade_id String,
+    strategy LowCardinality(String),
+    symbol String,
+    side LowCardinality(String),
+    ts DateTime64(3),
+    price Float64,
+    size Float64,
+    notional Float64,
+    fee Float64,
+    realized_pnl Float64,
+    reason LowCardinality(String),
+    created_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (strategy, symbol, trade_id)
+"""
+
+# Current sleeve snapshot, one row per (strategy, symbol).
+_PAPER_POSITIONS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.paper_positions
+(
+    strategy LowCardinality(String),
+    symbol String,
+    status LowCardinality(String),
+    entry_price Float64,
+    entry_ts Nullable(DateTime64(3)),
+    size Float64,
+    cash Float64,
+    cost_basis Float64,
+    last_bar_ts DateTime64(3),
+    updated_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (strategy, symbol)
+"""
+
 
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
-                _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL):
+                _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL,
+                _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL):
         client.command(ddl.format(db=db))
     # Idempotent column migration for databases created before Phase 2.1.
     client.command(

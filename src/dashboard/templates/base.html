@@ -11,8 +11,8 @@
 <body>
 <nav>
   <span class="brand">Alpha Research</span>
-  <a href="/" class="active">Backtesting</a>
-  <span class="disabled" title="coming in a later iteration">Paper Trading</span>
+  <a href="/" class="{{ 'active' if active|default('backtesting') == 'backtesting' }}">Backtesting</a>
+  <a href="/paper" class="{{ 'active' if active|default('backtesting') == 'paper' }}">Paper Trading</a>
   <span class="disabled" title="coming in a later iteration">Live Trading</span>
 </nav>
 <main>

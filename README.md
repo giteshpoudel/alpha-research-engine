@@ -2,7 +2,7 @@
 
 An autonomous quantitative research and portfolio analysis system for crypto markets. It ingests market time-series and social sentiment, scores sentiment with local embeddings, computes rolling signal metrics, and backtests trading strategies with strict train/test separation — all on local infrastructure you control.
 
-> **Status:** Active development. Phases 1–3 complete (storage, sentiment pipeline, backtesting framework). Research/backtesting/paper-trading only — no live exchange execution.
+> **Status:** Active development. Phases 1–5 complete (storage, sentiment pipeline, backtesting, LangGraph research agents, meta-learning) plus a monitoring dashboard and paper-trading forward simulation. Research/backtesting/paper-trading only — no live exchange execution.
 
 ## What it does
 
@@ -10,7 +10,8 @@ An autonomous quantitative research and portfolio analysis system for crypto mar
 - **Scores** every post's sentiment (−1…+1) with embedding-distance against bullish/bearish anchors, using a local Ollama model — deterministic, free, no API keys
 - **Aggregates** rolling metrics (5m/1h/24h): sentiment polarity index, mention velocity, engagement spikes per ticker
 - **Backtests** strategies (Mean Reversion, Funding-Rate Carry, Sentiment-Momentum) on years of data with a strict in-sample/out-of-sample split, and stores results + equity curves for analysis
-- **Designed for what's next:** Optuna-based parameter tuning, LangGraph research agents, and a monitoring dashboard (see Roadmap)
+- **Forward-tests** the tuned Mean Reversion strategy on live data as a paper-trading account (independent $1 sleeve per symbol), surfaced in a dashboard view
+- **Automates research:** Optuna walk-forward tuning, a LangGraph risk/macro/report agent pipeline, and a monitoring dashboard
 
 ## Architecture
 
@@ -88,7 +89,20 @@ python -m src.backtesting.runner --strategy all --symbols all --window ALL
 python -m src.backtesting.runner --strategy mean_reversion --symbols BTC,ETH --window OOS
 ```
 
-**Tests:** `python -m pytest tests/ -v` (96 tests; integration tests need the Docker stack up).
+**Paper trading** (independent $1 sleeve per symbol; forward step is idempotent):
+
+```bash
+python -m src.paper.runner --replay --from 2025-01-01   # rebuild history
+python -m src.paper.runner --once                       # hourly top-up + step
+```
+
+**Dashboard** (backtesting + paper-trading views):
+
+```bash
+python -m src.dashboard            # http://127.0.0.1:8000
+```
+
+**Tests:** `python -m pytest tests/ -v` (141 tests; integration tests need the Docker stack up).
 
 ## How it works
 
@@ -104,9 +118,13 @@ python -m src.backtesting.runner --strategy mean_reversion --symbols BTC,ETH --w
 src/
   ingestion/    # pollers (reddit/rss/stocktwits), scorer, aggregator, backfill
   backtesting/  # data layer, strategies, engine, runner
-config/         # launchd plist for scheduled pipeline
+  meta_learning/# Optuna tuner, causal allocator, OOS comparison
+  research/     # LangGraph agents + deterministic collectors + daily report
+  dashboard/    # FastAPI monitoring app (backtesting + paper trading)
+  paper/        # paper-trading forward simulation (executor, store, runner)
+config/         # launchd plists for pipeline, backfill, and paper trading
 docs/           # blueprint + design specs + implementation plans
-tests/          # 96 tests: unit + integration against live services
+tests/          # 141 tests: unit + integration against live services
 ```
 
 ## Roadmap
@@ -114,9 +132,11 @@ tests/          # 96 tests: unit + integration against live services
 - [x] **Phase 1** — Storage infrastructure (ClickHouse, Qdrant, schemas)
 - [x] **Phase 2** — Sentiment pipeline (ingestion, scoring, time-bucket metrics)
 - [x] **Phase 3** — Backtesting framework (3 strategies, IS/OOS, benchmark metrics)
-- [ ] **Phase 4** — Multi-agent research engine (LangGraph): risk, macro/sentiment, report agents
-- [ ] **Phase 5** — Meta-learner: Optuna walk-forward tuning, bandit strategy allocator, paper trading
-- [ ] **Dashboard** — web UI for backtest results, paper trading, and KPIs
+- [x] **Phase 4** — Multi-agent research engine (LangGraph): risk, macro/sentiment, report agents
+- [x] **Phase 5** — Meta-learner: Optuna walk-forward tuning, strategy allocator, OOS comparison
+- [x] **Dashboard** — web UI for backtest results and paper trading
+- [x] **Paper trading** — forward simulation of tuned Mean Reversion on live data
+- [ ] **Live trading** — order routing / execution (out of scope for now)
 - [ ] **Historical social dataset** — extends sentiment backtests before 2026
 
 ## Notes & limitations

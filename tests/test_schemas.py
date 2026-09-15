@@ -250,3 +250,33 @@ def test_research_reports_table(ch_client):
     assert cols["content"] == "String"
     assert cols["model"] == "LowCardinality(String)"
     assert cols["created_at"] == "DateTime64(3)"
+
+
+def test_paper_equity_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.paper_equity").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["strategy"] == "LowCardinality(String)"
+    assert cols["symbol"] == "String"
+    assert cols["ts"] == "DateTime64(3)"
+    for col in ("equity", "cash", "position_value", "mark_price"):
+        assert cols[col] == "Float64"
+    assert cols["status"] == "LowCardinality(String)"
+    assert cols["created_at"] == "DateTime64(3)"
+
+
+def test_paper_trades_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.paper_trades").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["trade_id"] == "String"
+    assert cols["strategy"] == "LowCardinality(String)"
+    assert cols["side"] == "LowCardinality(String)"
+    assert cols["realized_pnl"] == "Float64"
+
+
+def test_paper_positions_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.paper_positions").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["entry_ts"] == "Nullable(DateTime64(3))"
+    assert cols["cost_basis"] == "Float64"
+    assert cols["last_bar_ts"] == "DateTime64(3)"
+    assert cols["updated_at"] == "DateTime64(3)"

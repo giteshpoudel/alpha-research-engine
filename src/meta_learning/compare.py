@@ -22,9 +22,10 @@ from src.backtesting.engine import (
 )
 from src.backtesting.runner import store_result
 from src.backtesting.strategies import mean_reversion
-from src.ingestion.schemas import database_name, get_clickhouse_client
+from src.ingestion.schemas import get_clickhouse_client
 from src.ingestion.tickers import TICKER_ALIASES
 from src.meta_learning.allocator import allocator_windows, pick_strategy
+from src.meta_learning.params import get_tuned_params
 
 DEFAULT_FEE = 0.001
 _REBALANCE_DAYS = 7
@@ -32,14 +33,10 @@ _TRAILING_DAYS = 30
 
 
 def _tuned_params(ch_client, strategy: str, symbol: str) -> dict:
-    rows = ch_client.query(
-        f"SELECT params_json FROM {database_name()}.tuned_params FINAL "
-        "WHERE strategy = {s:String} AND symbol = {y:String} LIMIT 1",
-        parameters={"s": strategy, "y": symbol},
-    ).result_rows
-    if not rows:
+    params = get_tuned_params(ch_client, strategy, symbol)
+    if params is None:
         raise ValueError(f"no tuned params for {strategy} {symbol} — run tuner first")
-    return json.loads(rows[0][0])
+    return params
 
 
 def _execute_variant(ch_client, strategy: str, symbol: str, params: dict, fee: float):

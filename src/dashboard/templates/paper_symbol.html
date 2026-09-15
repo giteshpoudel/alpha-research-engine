@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ sleeve.symbol }} paper sleeve · Alpha Research{% endblock %}
+{% block content %}
+<h1>{{ sleeve.symbol }} <span class="tag">{{ sleeve.status }}</span></h1>
+<div class="cards">
+  <div class="card"><span>Equity</span><b>{{ "%.3f"|format(sleeve.equity) }}</b></div>
+  <div class="card"><span>Return</span><b>{{ "%.3f"|format(sleeve.total_return) }}</b></div>
+  <div class="card"><span>PnL</span><b>{{ "%.3f"|format(sleeve.pnl) }}</b></div>
+  <div class="card"><span>Entry Price</span><b>{{ "%.4f"|format(sleeve.entry_price) }}</b></div>
+  <div class="card"><span>Mark Price</span><b>{{ "%.4f"|format(sleeve.mark_price) }}</b></div>
+  <div class="card"><span>Last Bar</span><b class="mono">{{ sleeve.last_bar_ts }}</b></div>
+</div>
+<div class="chart-wrap"><canvas id="equity-chart"></canvas></div>
+<script>
+  const points = {{ points | tojson }};
+  new Chart(document.getElementById("equity-chart"), {
+    type: "line",
+    data: {
+      labels: points.map(p => p.ts),
+      datasets: [{
+        label: "Equity",
+        data: points.map(p => p.equity),
+        borderColor: "#4fc3f7",
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.1,
+      }],
+    },
+    options: {
+      animation: false,
+      scales: {
+        x: { ticks: { maxTicksLimit: 10, color: "#8892a0" }, grid: { color: "#232a35" } },
+        y: { ticks: { color: "#8892a0" }, grid: { color: "#232a35" } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+</script>
+<h2>Recent trades</h2>
+<table>
+  <thead>
+    <tr><th>Side</th><th>Time</th><th>Price</th><th>Size</th><th>Notional</th><th>Fee</th><th>Realized PnL</th></tr>
+  </thead>
+  <tbody>
+    {% for t in trades %}
+    <tr>
+      <td>{{ t.side }}</td>
+      <td>{{ t.ts }}</td>
+      <td>{{ "%.4f"|format(t.price) }}</td>
+      <td>{{ "%.4f"|format(t.size) }}</td>
+      <td>{{ "%.4f"|format(t.notional) }}</td>
+      <td>{{ "%.4f"|format(t.fee) }}</td>
+      <td>{{ "%.4f"|format(t.realized_pnl) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

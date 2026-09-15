@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Paper Trading · Alpha Research{% endblock %}
+{% block content %}
+<h1>Paper Trading <span class="tag">tuned mean reversion</span></h1>
+<p class="muted">
+  Forward simulation on live 1h bars — independent $1.00 sleeve per symbol, 0.1% fee per side.
+  {% if summary.last_bar_ts %}
+    Data through <b>{{ summary.last_bar_ts }}</b>.
+  {% else %}
+    No paper data yet — run <code>python -m src.paper.runner --replay</code>.
+  {% endif %}
+</p>
+<div class="cards">
+  <div class="card"><span>Equal-weight Return</span><b>{{ "%.3f"|format(summary.total_return) }}</b></div>
+  <div class="card"><span>Paper Sharpe</span><b>{{ "%.3f"|format(summary.sharpe) }}</b></div>
+  <div class="card"><span>Trades</span><b>{{ summary.total_trades }}</b></div>
+  <div class="card"><span>Win Rate</span><b>{{ "%.3f"|format(summary.win_rate) }}</b></div>
+  <div class="card"><span>Sleeves</span><b>{{ summary.num_sleeves }}</b></div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Symbol</th><th>Status</th><th>Entry</th><th>Mark</th><th>Equity</th>
+      <th>Return</th><th>PnL</th><th>Trades</th><th>Win Rate</th><th>Last Bar</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in symbols %}
+    <tr>
+      <td><a href="/paper/{{ row.symbol }}">{{ row.symbol }}</a></td>
+      <td>{{ row.status }}</td>
+      <td>{{ "%.4f"|format(row.entry_price) }}</td>
+      <td>{{ "%.4f"|format(row.mark_price) }}</td>
+      <td>{{ "%.3f"|format(row.equity) }}</td>
+      <td>{{ "%.3f"|format(row.total_return) }}</td>
+      <td>{{ "%.3f"|format(row.pnl) }}</td>
+      <td>{{ row.num_trades }}</td>
+      <td>{{ "%.3f"|format(row.win_rate) }}</td>
+      <td class="muted">{{ row.last_bar_ts }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
