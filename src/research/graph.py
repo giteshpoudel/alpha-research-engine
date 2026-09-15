@@ -80,6 +80,11 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
         risk_section = state["risk_section"]
         macro_section = state["macro_section"]
         report_md = state["report_md"]
+        # The disclaimer is unconditional — don't rely on LLM compliance.
+        if "Not financial advice." not in report_md:
+            report_md += ("\n\nPortfolio figures are strategy-implied "
+                          "(research/backtest scope), not real holdings. "
+                          "Not financial advice.\n")
     except RuntimeError:
         model = "unavailable"
         # LLM failed: collectors may not have run yet in this process — collect directly.
