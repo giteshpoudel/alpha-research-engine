@@ -81,9 +81,10 @@ def run_allocator(ch_client, symbol: str, fee: float = DEFAULT_FEE,
     prefix = "TEST_" if test_run else ""
     oos_start, _ = WINDOWS["OOS"]
     prices = slice_window(load_ohlcv(ch_client, symbol, start=oos_start)["close"], "OOS")
-    funding = slice_window(load_funding(ch_client, symbol, start=oos_start), "OOS")
     mr_params = _tuned_params(ch_client, f"{prefix}mean_reversion", symbol)
-    fa_params = _tuned_params(ch_client, f"{prefix}funding_arb", symbol)
+    # funding_arb retired 2026-09 (fee drag > carry in every OOS variant); the
+    # allocator currently rides tuned mean_reversion alone. The pick machinery
+    # stays so future strategies can rejoin the candidate set.
 
     oos_end = prices.index[-1].to_pydatetime()
     equity_points: dict[pd.Timestamp, float] = {pd.Timestamp(oos_start): 1.0}
@@ -91,30 +92,22 @@ def run_allocator(ch_client, symbol: str, fee: float = DEFAULT_FEE,
     segment_pnls: list[float] = []
     for win_start, win_end in allocator_windows(oos_start, oos_end, _REBALANCE_DAYS):
         trail_start = win_start - timedelta(days=_TRAILING_DAYS)
-        trailing = {}
         if trail_start >= oos_start:
             trail_mr = prices.loc[trail_start:win_start]
-            trail_fa = funding.loc[trail_start:win_start]
-            trailing["mean_reversion"] = (
-                _segment_return(run_signal_backtest(
-                    trail_mr, *mean_reversion.signals(trail_mr, **mr_params), fee=fee))
-                if len(trail_mr) > 48 else None
-            )
-            trailing["funding_arb"] = (
-                _segment_return(run_funding_backtest(trail_fa, threshold=fa_params["threshold"], fee=fee))
-                if len(trail_fa) > 0 else None
-            )
+            trailing = {
+                "mean_reversion": (
+                    _segment_return(run_signal_backtest(
+                        trail_mr, *mean_reversion.signals(trail_mr, **mr_params), fee=fee))
+                    if len(trail_mr) > 48 else None
+                )
+            }
         else:
-            trailing = {"mean_reversion": None, "funding_arb": None}
-        picked = pick_strategy(trailing)
+            trailing = {"mean_reversion": None}
+        pick_strategy(trailing)
 
         seg_prices = prices.loc[win_start:win_end]
-        if picked == "funding_arb":
-            seg_data = funding.loc[win_start:win_end]
-            seg_result = run_funding_backtest(seg_data, threshold=fa_params["threshold"], fee=fee)
-        else:
-            seg_result = run_signal_backtest(
-                seg_prices, *mean_reversion.signals(seg_prices, **mr_params), fee=fee)
+        seg_result = run_signal_backtest(
+            seg_prices, *mean_reversion.signals(seg_prices, **mr_params), fee=fee)
         composite *= 1.0 + seg_result.total_return
         segment_pnls.append(seg_result.total_return)
         equity_points[pd.Timestamp(win_end)] = composite
@@ -146,7 +139,8 @@ def main(argv: list[str] | None = None) -> None:
     ch_client = get_clickhouse_client()
     print(f"{'symbol':<8}{'variant':<12}{'total_return':>13}{'sharpe':>9}{'max_dd':>9}")
     for symbol in symbols:
-        for strategy in ("mean_reversion", "funding_arb"):
+        # funding_arb retired 2026-09 (see tuner.TUNABLE_STRATEGIES note)
+        for strategy in ("mean_reversion",):
             try:
                 tuned = _tuned_params(ch_client, strategy, symbol)
                 static = (dict(mean_reversion.MR_DEFAULTS) if strategy == "mean_reversion"

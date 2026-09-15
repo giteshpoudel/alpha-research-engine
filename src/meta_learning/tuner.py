@@ -18,7 +18,11 @@ from src.backtesting.strategies import mean_reversion
 from src.ingestion.schemas import database_name, get_clickhouse_client
 from src.ingestion.tickers import TICKER_ALIASES
 
-TUNABLE_STRATEGIES = ("mean_reversion", "funding_arb")
+# funding_arb retired 2026-09: Phase 5 OOS comparison showed fee drag exceeds
+# carry at retail venues in every variant (tuned thresholds either sit out the
+# market or lose heavily). Code and historical results remain; it is excluded
+# from future tuning runs.
+TUNABLE_STRATEGIES = ("mean_reversion",)
 DEFAULT_FEE = 0.001
 _TRAIN_MONTHS, _VAL_MONTHS, _STEP_MONTHS = 12, 3, 3
 _IS_START = datetime(2022, 1, 1, tzinfo=timezone.utc)
