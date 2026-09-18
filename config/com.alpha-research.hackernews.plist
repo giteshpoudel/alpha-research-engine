@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.alpha-research.hackernews</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/.venv/bin/python</string>
+        <string>-m</string>
+        <string>src.ingestion.hackernews</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>6</integer>
+        <key>Minute</key>
+        <integer>37</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/data/hackernews.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/data/hackernews.log</string>
+</dict>
+</plist>

@@ -63,13 +63,15 @@ def _execute(ch_client, strategy: str, symbol: str, window: str, fee: float):
         result = run_funding_backtest(funding, fee=fee)
         params = {"threshold": 0.0001}
     elif base_strategy == "sentiment_momentum":
-        start, end = WINDOWS["PRELIM"]
-        prices = slice_window(load_ohlcv(ch_client, symbol, start=start)["close"], "PRELIM")
+        # Sentiment history now spans the OOS window (backfilled 2025-09+);
+        # evaluate on whatever window is requested. Before the first metric the
+        # signal forward-fills to NaN -> no trades, which is honest.
+        start, _ = WINDOWS[window]
+        prices = slice_window(load_ohlcv(ch_client, symbol, start=start)["close"], window)
         sentiment = load_sentiment(ch_client, symbol)["weighted_score"]
         entries, exits = sentiment_momentum.signals(prices, sentiment, **sentiment_momentum.SM_DEFAULTS)
         result = run_signal_backtest(prices, entries, exits, fee=fee)
         params = dict(sentiment_momentum.SM_DEFAULTS)
-        window = "PRELIM"
     else:
         start, end = WINDOWS[window]
         prices = slice_window(load_ohlcv(ch_client, symbol, start=start)["close"], window)
@@ -131,8 +133,8 @@ def main(argv: list[str] | None = None) -> None:
     for strategy in strategies:
         for symbol in symbols:
             for window in windows:
-                if strategy == "sentiment_momentum":
-                    window = "PRELIM"
+                if strategy == "sentiment_momentum" and window == "IS":
+                    continue  # no sentiment history in IS
                 try:
                     run_id = run_backtest(ch_client, strategy, symbol, window, fee=args.fee)
                     print(f"{strategy} {symbol} {window}: done ({run_id})")

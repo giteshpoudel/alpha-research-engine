@@ -60,6 +60,26 @@ def test_run_backtest_stores_and_collapses(ch_client):
                 parameters={"r": run_id}, settings={"mutations_sync": 1})
 
 
+def test_sentiment_momentum_runs_on_oos_window(ch_client):
+    run_id = None
+    try:
+        run_id = run_backtest(ch_client, "TEST_sentiment_momentum", "BTC", "OOS", fee=0.0)
+        rows = ch_client.query(
+            f"SELECT window, count() FROM {database_name()}.backtest_runs FINAL "
+            "WHERE run_id = {r:String} GROUP BY window",
+            parameters={"r": run_id},
+        ).result_rows
+        assert [r[0] for r in rows] == ["OOS"]
+    finally:
+        if run_id:
+            ch_client.command(
+                f"ALTER TABLE {database_name()}.backtest_runs DELETE WHERE run_id = {{r:String}}",
+                parameters={"r": run_id}, settings={"mutations_sync": 1})
+            ch_client.command(
+                f"ALTER TABLE {database_name()}.backtest_equity DELETE WHERE run_id = {{r:String}}",
+                parameters={"r": run_id}, settings={"mutations_sync": 1})
+
+
 def test_main_runs_requested_strategy_only(monkeypatch, ch_client):
     seen = []
     monkeypatch.setattr("src.backtesting.runner.run_backtest",
