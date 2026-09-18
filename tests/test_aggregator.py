@@ -82,6 +82,23 @@ def test_run_aggregation_writes_recent_buckets(ch_client):
     assert rows and rows[0][0] == 1
 
 
+def test_backfill_metrics_only_nonempty_buckets(ch_client):
+    from src.ingestion.aggregator import backfill_metrics
+
+    b1 = datetime(2024, 3, 1, 8, 0, tzinfo=timezone.utc)
+    b2 = datetime(2024, 3, 1, 9, 0, tzinfo=timezone.utc)
+    _seed_post(ch_client, "test:bf-1", ["TEST"], 0.2, 1, 0, b1 + timedelta(minutes=1))
+    # b2 is intentionally empty
+    assert backfill_metrics(ch_client, "1h", b1, b1 + timedelta(hours=3)) >= 1
+    count = ch_client.query(
+        f"SELECT count() FROM {database_name()}.sentiment_metrics FINAL "
+        "WHERE bucket_size = '1h' AND ticker = 'TEST' "
+        "AND bucket_start >= {s:DateTime64(3)} AND bucket_start <= {e:DateTime64(3)}",
+        parameters={"s": b1, "e": b2},
+    ).result_rows[0][0]
+    assert count == 1  # only the non-empty bucket was computed
+
+
 def test_compute_metrics_unscored_only_bucket(ch_client):
     bucket_start = datetime(2024, 2, 20, 10, 0, tzinfo=timezone.utc)
     # only an unscored TEST post: avgIf over zero scored rows yields NaN,

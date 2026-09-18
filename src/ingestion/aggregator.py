@@ -105,3 +105,51 @@ def run_aggregation(ch_client, now: datetime | None = None) -> int:
         bucket_start = align_start(now, size) - timedelta(seconds=_BUCKET_SECONDS[size])
         total += compute_metrics(ch_client, size, bucket_start)
     return total
+
+
+def backfill_metrics(ch_client, bucket_size: str, start: datetime,
+                     end: datetime) -> int:
+    """Recompute every non-empty bucket in [start, end) — historical backfill.
+
+    Only buckets that actually contain ticker-tagged posts are touched, so a
+    year of sparse history is a few hundred ``compute_metrics`` calls rather
+    than every bucket in the range. Idempotent (recompute replaces).
+    """
+    secs = _BUCKET_SECONDS[bucket_size]
+    rows = ch_client.query(
+        f"""
+        SELECT DISTINCT toStartOfInterval(published_at,
+               INTERVAL {secs} SECOND) AS bucket_start
+        FROM {database_name()}.sentiment_posts
+        WHERE published_at >= {{start:DateTime64(3)}} AND published_at < {{end:DateTime64(3)}}
+          AND notEmpty(tickers)
+        ORDER BY bucket_start
+        """,
+        parameters={"start": start, "end": end},
+    ).result_rows
+    total = 0
+    for (bucket_start,) in rows:
+        if bucket_start.tzinfo is None:
+            bucket_start = bucket_start.replace(tzinfo=timezone.utc)
+        total += compute_metrics(ch_client, bucket_size, bucket_start)
+    return total
+
+
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
+    from src.ingestion.schemas import get_clickhouse_client
+
+    parser = argparse.ArgumentParser(description="Backfill historical sentiment metrics")
+    parser.add_argument("--bucket", choices=BUCKET_SIZES, default="1h")
+    parser.add_argument("--start", required=True, metavar="YYYY-MM-DD")
+    parser.add_argument("--end", required=True, metavar="YYYY-MM-DD")
+    args = parser.parse_args(argv)
+    start = datetime.fromisoformat(args.start).replace(tzinfo=timezone.utc)
+    end = datetime.fromisoformat(args.end).replace(tzinfo=timezone.utc)
+    n = backfill_metrics(get_clickhouse_client(), args.bucket, start, end)
+    print(f"aggregator: {n} metric rows backfilled ({args.bucket})")
+
+
+if __name__ == "__main__":
+    main()

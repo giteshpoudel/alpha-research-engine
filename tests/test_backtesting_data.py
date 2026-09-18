@@ -53,8 +53,10 @@ def test_load_funding_btc(ch_client):
 def test_load_sentiment_and_slice_window(ch_client):
     df = load_sentiment(ch_client, "BTC", bucket="1h")
     assert list(df.columns) == ["weighted_score", "velocity", "engagement_ratio"]
-    prelim = slice_window(df, "PRELIM")
-    assert len(prelim) == len(df)  # all sentiment data is in the PRELIM window
+    # Backfilled sentiment history (2025-09+) is entirely OOS; the PRELIM window
+    # is a subset.
+    assert len(slice_window(df, "OOS")) == len(df)
+    assert len(slice_window(df, "PRELIM")) <= len(df)
     is_slice = slice_window(df, "IS")
     assert len(is_slice) == 0  # nothing in the IS window (guardrail #1 sanity)
 

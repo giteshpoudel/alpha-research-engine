@@ -9,6 +9,7 @@ An autonomous quantitative research and portfolio analysis system for crypto mar
 - **Ingests** crypto price data (OHLCV + funding rates, 2022–present) and social sentiment (StockTwits streams, crypto news RSS) into local databases on a schedule
 - **Scores** every post's sentiment (−1…+1) with embedding-distance against bullish/bearish anchors, using a local Ollama model — deterministic, free, no API keys
 - **Aggregates** rolling metrics (5m/1h/24h): sentiment polarity index, mention velocity, engagement spikes per ticker
+- **Backfills** historical social/news discussion (Hacker News via Algolia, archived to 2006, with real engagement) to extend sentiment analysis before live collection began
 - **Backtests** strategies (Mean Reversion, Funding-Rate Carry, Sentiment-Momentum) on years of data with a strict in-sample/out-of-sample split, and stores results + equity curves for analysis
 - **Forward-tests** the tuned Mean Reversion strategy on live data as a paper-trading account (independent $1 sleeve per symbol), surfaced in a dashboard view
 - **Automates research:** Optuna walk-forward tuning, a LangGraph risk/macro/report agent pipeline that also appends deterministic paper-trading and sentiment-signal sections, and a monitoring dashboard
@@ -50,7 +51,7 @@ An autonomous quantitative research and portfolio analysis system for crypto mar
 | Embeddings | Ollama `nomic-embed-text` (local, 768-dim) |
 | Backtesting | VectorBT |
 | Price data | Binance.US, Coinbase, Hyperliquid (public APIs) |
-| Sentiment data | StockTwits, RSS (public, unauthenticated) |
+| Sentiment data | StockTwits, RSS, Hacker News/Algolia (public, unauthenticated) |
 
 ## Quickstart
 
@@ -102,6 +103,13 @@ python -m src.paper.runner --once                       # hourly top-up + step
 python -m src.meta_learning.retune            # publish a new param version
 ```
 
+**Historical sentiment backfill** (Hacker News via Algolia; free and archived to 2006):
+
+```bash
+python -m src.ingestion.hackernews --start 2024-01-01   # fetch + store posts
+python -m src.ingestion.aggregator --bucket 1h --start 2024-01-01 --end 2026-09-19  # metrics
+```
+
 **Signal evaluation** (does the social/news feed predict forward returns?):
 
 ```bash
@@ -115,7 +123,7 @@ python -m src.research.signal_eval --no-store  # print only
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (162 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (174 tests; integration tests need the Docker stack up).
 
 ## How it works
 
@@ -152,7 +160,7 @@ tests/          # 141 tests: unit + integration against live services
 - [x] **Signal evaluation** — predictive IC / event study for the social feed
 - [x] **Feedback loop** — rolling re-tune (versioned params) + per-symbol allocation gating
 - [ ] **Live trading** — order routing / execution (out of scope for now)
-- [ ] **Historical social dataset** — extends sentiment backtests before 2026
+- [~] **Historical social dataset** — Hacker News backfill shipped (2014+); historical tweets/Reddit still blocked (paid/restricted)
 
 ## Notes & limitations
 
