@@ -40,9 +40,12 @@ def test_run_report_stores_sections_and_file(ch_client, tmp_path: Path):
         "WHERE report_date = {d:Date} ORDER BY section",
         parameters={"d": TEST_DATE},
     ).result_rows
-    assert [r[0] for r in rows] == ["macro", "report", "risk"]
+    assert [r[0] for r in rows] == ["macro", "portfolio", "report", "risk", "signal"]
     assert all(r[1] == "mock" for r in rows)
     assert all(r[2] for r in rows)
+    # deterministic sections are appended to the report regardless of the LLM
+    assert "## Paper Trading" in md
+    assert "## Sentiment Signal" in md
 
     # idempotent: re-run replaces, never duplicates
     run_report(ch_client, TEST_DATE, out_dir=tmp_path, chat_fn=_stub_chat)
@@ -51,7 +54,7 @@ def test_run_report_stores_sections_and_file(ch_client, tmp_path: Path):
         "WHERE report_date = {d:Date}",
         parameters={"d": TEST_DATE},
     ).result_rows
-    assert count[0][0] == 3
+    assert count[0][0] == 5
 
 
 def test_run_report_llm_failure_falls_back_to_data(ch_client, tmp_path: Path):

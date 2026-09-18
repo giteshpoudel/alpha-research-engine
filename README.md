@@ -11,7 +11,7 @@ An autonomous quantitative research and portfolio analysis system for crypto mar
 - **Aggregates** rolling metrics (5m/1h/24h): sentiment polarity index, mention velocity, engagement spikes per ticker
 - **Backtests** strategies (Mean Reversion, Funding-Rate Carry, Sentiment-Momentum) on years of data with a strict in-sample/out-of-sample split, and stores results + equity curves for analysis
 - **Forward-tests** the tuned Mean Reversion strategy on live data as a paper-trading account (independent $1 sleeve per symbol), surfaced in a dashboard view
-- **Automates research:** Optuna walk-forward tuning, a LangGraph risk/macro/report agent pipeline, and a monitoring dashboard
+- **Automates research:** Optuna walk-forward tuning, a LangGraph risk/macro/report agent pipeline that also appends deterministic paper-trading and sentiment-signal sections, and a monitoring dashboard
 
 ## Architecture
 

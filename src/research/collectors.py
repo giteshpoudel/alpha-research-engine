@@ -184,3 +184,67 @@ def collect_macro_data(ch_client) -> dict:
         "funding_extremes": funding_extremes,
         "top_posts": top_posts,
     }
+
+
+def collect_portfolio_data(ch_client) -> dict:
+    """Paper-trading / feedback-loop state: sleeves, halts, param versions."""
+    db = database_name()
+    sleeve_rows = ch_client.query(
+        f"""
+        SELECT symbol, argMax(equity, ts) AS equity, max(ts) AS last_bar_ts
+        FROM {db}.paper_equity FINAL
+        WHERE NOT startsWith(strategy, 'TEST_')
+        GROUP BY symbol ORDER BY symbol
+        """
+    ).result_rows
+    controls = {
+        r[0]: (bool(r[1]), float(r[2])) for r in ch_client.query(
+            f"SELECT symbol, enabled, trailing_return FROM {db}.paper_controls FINAL "
+            "WHERE NOT startsWith(strategy, 'TEST_')"
+        ).result_rows
+    }
+    sleeves = []
+    for symbol, equity, _ in sleeve_rows:
+        enabled, trailing = controls.get(symbol, (True, 0.0))
+        sleeves.append({
+            "symbol": symbol,
+            "equity": round(float(equity), 4),
+            "total_return": round(float(equity) - 1.0, 4),
+            "trailing_return": round(trailing, 4),
+            "enabled": enabled,
+        })
+    equal_weight = (sum(s["equity"] for s in sleeves) / len(sleeves)) if sleeves else 0.0
+    params = ch_client.query(
+        f"""
+        SELECT symbol, max(valid_from) AS valid_from
+        FROM {db}.tuned_params FINAL
+        WHERE strategy = 'mean_reversion' AND NOT startsWith(symbol, 'TEST')
+        GROUP BY symbol ORDER BY symbol
+        """
+    ).result_rows
+    as_of = max((r[2] for r in sleeve_rows), default=None)
+    return {
+        "as_of": str(as_of) if as_of else None,
+        "equal_weight_equity": round(equal_weight, 4),
+        "equal_weight_return": round(equal_weight - 1.0, 4) if sleeves else 0.0,
+        "sleeves": sleeves,
+        "halted": [s["symbol"] for s in sleeves if not s["enabled"]],
+        "param_valid_from": {s: str(v) for s, v in params},
+    }
+
+
+def collect_signal_data(ch_client) -> dict:
+    """Strongest statistically significant sentiment predictive results."""
+    rows = ch_client.query(
+        f"""
+        SELECT bucket_size, feature, horizon, value, n, tstat
+        FROM {database_name()}.signal_eval_results FINAL
+        WHERE method = 'ic_pooled' AND insufficient = 0
+        ORDER BY abs(value) DESC LIMIT 5
+        """
+    ).result_rows
+    return {"top_ic": [
+        {"bucket": b, "feature": f, "horizon": h, "ic": round(float(v), 4),
+         "n": int(n), "t": round(float(t), 2)}
+        for b, f, h, v, n, t in rows
+    ]}

@@ -19,6 +19,8 @@ class ReportState(TypedDict, total=False):
     report_date: date
     risk_data: dict
     macro_data: dict
+    portfolio_data: dict
+    signal_data: dict
     risk_section: str
     macro_section: str
     report_md: str
@@ -49,6 +51,45 @@ def build_graph(chat_fn=chat) -> object:
     return graph.compile()
 
 
+def _portfolio_md(portfolio: dict) -> str:
+    lines = ["## Paper Trading (strategy-implied book)", ""]
+    sleeves = portfolio.get("sleeves") or []
+    if not sleeves:
+        lines.append("No paper data yet.")
+        return "\n".join(lines)
+    lines.append(f"As of {portfolio['as_of']}; equal-weight return "
+                 f"{portfolio['equal_weight_return']:+.3f}.")
+    halted = portfolio.get("halted") or []
+    lines.append(f"Halts (trailing-30d < 0): {', '.join(halted) if halted else 'none'}.")
+    lines.append("")
+    lines.append("| Symbol | Equity | Total | Trailing 30d | Status |")
+    lines.append("|---|---:|---:|---:|---|")
+    for s in sleeves:
+        lines.append(f"| {s['symbol']} | {s['equity']:.3f} | {s['total_return']:+.3f} | "
+                     f"{s['trailing_return']:+.3f} | {'halted' if not s['enabled'] else 'active'} |")
+    versions = sorted(set((portfolio.get("param_valid_from") or {}).values()))
+    if versions:
+        lines.append("")
+        lines.append(f"Param version in effect: {', '.join(versions)}.")
+    return "\n".join(lines)
+
+
+def _signal_md(signal: dict) -> str:
+    lines = ["## Sentiment Signal", ""]
+    top = signal.get("top_ic") or []
+    if not top:
+        lines.append("No statistically significant predictive IC at current sample sizes.")
+        return "\n".join(lines)
+    lines.append("Strongest cross-sectional ICs (block-bootstrap significant):")
+    lines.append("")
+    lines.append("| Bucket | Feature | Horizon | IC | n | t |")
+    lines.append("|---|---|---|---:|---:|---:|")
+    for r in top:
+        lines.append(f"| {r['bucket']} | {r['feature']} | {r['horizon']} | "
+                     f"{r['ic']:+.3f} | {r['n']} | {r['t']:+.2f} |")
+    return "\n".join(lines)
+
+
 def _data_summary(state: ReportState) -> str:
     lines = ["# Daily Research Report (data summary — LLM unavailable)", ""]
     lines.append("## Signal states (strategy-implied book)")
@@ -59,6 +100,10 @@ def _data_summary(state: ReportState) -> str:
     for item in state["macro_data"]["sentiment"][:5]:
         lines.append(f"- {item['ticker']}: score {item['weighted_score']}, "
                      f"velocity {item['velocity']}, flags {item['flags']}")
+    lines.append("")
+    lines.append(_portfolio_md(state.get("portfolio_data", {})))
+    lines.append("")
+    lines.append(_signal_md(state.get("signal_data", {})))
     lines.append("")
     lines.append("Portfolio figures are strategy-implied (research/backtest "
                  "scope), not real holdings. Not financial advice.")
@@ -71,7 +116,14 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
     out_dir = out_dir or Path("data/reports")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    state: ReportState = {"report_date": report_date}
+    # Deterministic portfolio/signal data feeds the editor and the appended
+    # sections; collected up front so the LLM graph stays a simple risk/macro
+    # diamond.
+    state: ReportState = {
+        "report_date": report_date,
+        "portfolio_data": collectors.collect_portfolio_data(ch_client),
+        "signal_data": collectors.collect_signal_data(ch_client),
+    }
     # Identity check: tests inject a stub chat_fn; production uses llm.chat.
     model = "mock" if chat_fn is not chat else active_model()
     try:
@@ -80,26 +132,39 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
         risk_section = state["risk_section"]
         macro_section = state["macro_section"]
         report_md = state["report_md"]
-        # The disclaimer is unconditional — don't rely on LLM compliance.
-        if "Not financial advice." not in report_md:
-            report_md += ("\n\nPortfolio figures are strategy-implied "
-                          "(research/backtest scope), not real holdings. "
-                          "Not financial advice.\n")
     except RuntimeError:
         model = "unavailable"
         # LLM failed: collectors may not have run yet in this process — collect directly.
-        if "risk_data" not in state:
-            state["risk_data"] = collectors.collect_risk_data(ch_client)
-        if "macro_data" not in state:
-            state["macro_data"] = collectors.collect_macro_data(ch_client)
+        for key, fn in (("risk_data", collectors.collect_risk_data),
+                        ("macro_data", collectors.collect_macro_data),
+                        ("portfolio_data", collectors.collect_portfolio_data),
+                        ("signal_data", collectors.collect_signal_data)):
+            if key not in state:
+                state[key] = fn(ch_client)
         risk_section = _data_summary(state)
         macro_section = _data_summary(state)
         report_md = _data_summary(state)
+
+    # Deterministic sections appended unconditionally so the numbers always
+    # appear, regardless of what the LLM editor chose to include.
+    portfolio_section = _portfolio_md(state.get("portfolio_data", {}))
+    signal_section = _signal_md(state.get("signal_data", {}))
+    for section in (portfolio_section, signal_section):
+        heading = section.splitlines()[0]
+        if heading and heading not in report_md:
+            report_md += "\n\n" + section
+    # The disclaimer is unconditional — don't rely on LLM compliance.
+    if "Not financial advice." not in report_md:
+        report_md += ("\n\nPortfolio figures are strategy-implied "
+                      "(research/backtest scope), not real holdings. "
+                      "Not financial advice.\n")
 
     now = datetime.now(timezone.utc)
     rows = [
         [report_date, "risk", risk_section, model, now],
         [report_date, "macro", macro_section, model, now],
+        [report_date, "portfolio", portfolio_section, model, now],
+        [report_date, "signal", signal_section, model, now],
         [report_date, "report", report_md, model, now],
     ]
     ch_client.insert(

@@ -50,5 +50,7 @@ def report_agent(state: dict, chat_fn=chat) -> dict:
         "macro_section": state["macro_section"],
         "risk_data": state["risk_data"],
         "macro_data": state["macro_data"],
+        "portfolio_data": state.get("portfolio_data", {}),
+        "signal_data": state.get("signal_data", {}),
     }, default=str)
     return {"report_md": chat_fn(_REPORT_SYSTEM, user)}
