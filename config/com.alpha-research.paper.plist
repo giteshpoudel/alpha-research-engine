@@ -18,6 +18,8 @@
         <key>Minute</key>
         <integer>5</integer>
     </dict>
+    <key>RunAtLoad</key>
+    <true/>
     <key>StandardOutPath</key>
     <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/data/paper.log</string>
     <key>StandardErrorPath</key>
