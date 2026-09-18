@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from src.meta_learning.retune import retune_window
 from src.meta_learning.tuner import TUNABLE_STRATEGIES, tune, walk_forward_folds
 from src.ingestion.schemas import database_name, get_clickhouse_client
 
@@ -48,6 +49,48 @@ def test_tune_stores_tuned_params():
     finally:
         ch.command(
             f"ALTER TABLE {database_name()}.tuned_params DELETE WHERE strategy = 'TEST_mean_reversion'",
+            settings={"mutations_sync": 1},
+        )
+
+
+def test_walk_forward_folds_respects_custom_bounds():
+    is_start = datetime(2023, 1, 1, tzinfo=timezone.utc)
+    is_end = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    folds = walk_forward_folds(is_start, is_end)
+    assert folds
+    for train_start, _, _, val_end in folds:
+        assert train_start >= is_start
+        assert val_end <= is_end
+
+
+def test_retune_window_honors_embargo():
+    now = datetime(2026, 10, 1, 3, 30, tzinfo=timezone.utc)
+    deploy, is_start, is_end = retune_window(now, embargo_days=7, months=36)
+    assert deploy == datetime(2026, 10, 1, 3, 0, tzinfo=timezone.utc)
+    assert is_end == deploy - timedelta(days=7)
+    assert is_start == datetime(2023, 9, 24, 3, 0, tzinfo=timezone.utc)  # is_end - 36mo
+    assert is_start < is_end < deploy
+
+
+def test_tune_stores_valid_from():
+    ch = get_clickhouse_client()
+    vf = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    ch.command(
+        f"ALTER TABLE {database_name()}.tuned_params DELETE "
+        "WHERE strategy = 'TEST_mean_reversion' AND symbol = 'SOL'",
+        settings={"mutations_sync": 1},
+    )
+    try:
+        tune(ch, "TEST_mean_reversion", "SOL", n_trials=3, seed=1, valid_from=vf)
+        rows = ch.query(
+            f"SELECT valid_from FROM {database_name()}.tuned_params FINAL "
+            "WHERE strategy = 'TEST_mean_reversion' AND symbol = 'SOL'"
+        ).result_rows
+        assert len(rows) == 1
+        assert rows[0][0].replace(tzinfo=timezone.utc) == vf
+    finally:
+        ch.command(
+            f"ALTER TABLE {database_name()}.tuned_params DELETE WHERE strategy LIKE 'TEST%'",
             settings={"mutations_sync": 1},
         )
 

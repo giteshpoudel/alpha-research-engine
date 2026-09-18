@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ sleeve.symbol }} paper sleeve · Alpha Research{% endblock %}
 {% block content %}
-<h1>{{ sleeve.symbol }} <span class="tag">{{ sleeve.status }}</span></h1>
+<h1>{{ sleeve.symbol }} <span class="tag">{{ sleeve.status }}</span>
+  {% if not sleeve.enabled %}<span class="tag prelim">halted</span>{% endif %}</h1>
 <div class="cards">
   <div class="card"><span>Equity</span><b>{{ "%.3f"|format(sleeve.equity) }}</b></div>
   <div class="card"><span>Return</span><b>{{ "%.3f"|format(sleeve.total_return) }}</b></div>
   <div class="card"><span>PnL</span><b>{{ "%.3f"|format(sleeve.pnl) }}</b></div>
+  <div class="card"><span>Trailing 30d</span><b>{{ "%.3f"|format(sleeve.trailing_return) }}</b></div>
   <div class="card"><span>Entry Price</span><b>{{ "%.4f"|format(sleeve.entry_price) }}</b></div>
   <div class="card"><span>Mark Price</span><b>{{ "%.4f"|format(sleeve.mark_price) }}</b></div>
   <div class="card"><span>Last Bar</span><b class="mono">{{ sleeve.last_bar_ts }}</b></div>

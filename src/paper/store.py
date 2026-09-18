@@ -8,7 +8,7 @@ duplicating them.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from src.ingestion.schemas import database_name
 from src.paper.executor import EquityRow, SleeveState, Trade
@@ -24,6 +24,9 @@ _TRADE_COLUMNS = (
 _POSITION_COLUMNS = (
     "strategy", "symbol", "status", "entry_price", "entry_ts", "size",
     "cash", "cost_basis", "last_bar_ts", "updated_at",
+)
+_CONTROL_COLUMNS = (
+    "strategy", "symbol", "enabled", "trailing_return", "as_of", "updated_at",
 )
 
 
@@ -105,3 +108,26 @@ def latest_closed_bar_ts(client, symbol: str, interval: str = "1h") -> datetime 
         parameters={"y": symbol, "i": interval},
     ).result_rows
     return _utc(rows[0][0]) if rows else None
+
+
+def load_recent_equity(client, strategy: str, symbol: str, before: datetime,
+                       days: int = 45) -> list[tuple[datetime, float]]:
+    """Equity points in [before - days, before), for causal trailing returns."""
+    rows = client.query(
+        f"SELECT ts, equity FROM {database_name()}.paper_equity FINAL "
+        "WHERE strategy = {s:String} AND symbol = {y:String} "
+        "AND ts >= {lo:DateTime64(3)} AND ts < {hi:DateTime64(3)} ORDER BY ts",
+        parameters={"s": strategy, "y": symbol,
+                    "lo": before - timedelta(days=days), "hi": before},
+    ).result_rows
+    return [(_utc(ts), float(eq)) for ts, eq in rows]
+
+
+def upsert_control(client, strategy: str, symbol: str, enabled: bool,
+                   trailing_return: float, as_of: datetime) -> None:
+    now = datetime.now(timezone.utc)
+    client.insert(
+        f"{database_name()}.paper_controls",
+        [[strategy, symbol, 1 if enabled else 0, float(trailing_return), as_of, now]],
+        column_names=list(_CONTROL_COLUMNS),
+    )

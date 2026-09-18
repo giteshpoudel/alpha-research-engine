@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import optuna
 
-from src.backtesting.data import WINDOWS, load_funding, load_ohlcv
+from src.backtesting.data import load_funding, load_ohlcv
 from src.backtesting.engine import run_funding_backtest, run_signal_backtest
 from src.backtesting.strategies import mean_reversion
 from src.ingestion.schemas import database_name, get_clickhouse_client
@@ -31,24 +31,30 @@ _IS_END_EXCLUSIVE = datetime(2025, 1, 1, tzinfo=timezone.utc)  # IS end candle +
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def _add_months(dt: datetime, months: int) -> datetime:
+def add_months(dt: datetime, months: int) -> datetime:
     month = dt.month - 1 + months
     return dt.replace(year=dt.year + month // 12, month=month % 12 + 1)
 
 
-def walk_forward_folds() -> list[tuple[datetime, datetime, datetime, datetime]]:
+# Backwards-compatible private alias.
+_add_months = add_months
+
+
+def walk_forward_folds(is_start: datetime = _IS_START,
+                       is_end_exclusive: datetime = _IS_END_EXCLUSIVE
+                       ) -> list[tuple[datetime, datetime, datetime, datetime]]:
     folds = []
-    start = _IS_START
+    start = is_start
     while True:
-        train_end = _add_months(start, _TRAIN_MONTHS)
-        val_end = _add_months(train_end, _VAL_MONTHS)
-        if val_end > _IS_END_EXCLUSIVE:
+        train_end = add_months(start, _TRAIN_MONTHS)
+        val_end = add_months(train_end, _VAL_MONTHS)
+        if val_end > is_end_exclusive:
             break
         folds.append((start, train_end, train_end, val_end))
-        start = _add_months(start, _STEP_MONTHS)
-    # Guardrail #1 tripwire: every bound must sit inside the IS window.
+        start = add_months(start, _STEP_MONTHS)
+    # Guardrail #1 tripwire: every bound must sit inside the [is_start, is_end) window.
     for train_start, train_end, val_start, val_end in folds:
-        if not (train_start >= WINDOWS["IS"][0] and val_end <= _IS_END_EXCLUSIVE):
+        if not (train_start >= is_start and val_end <= is_end_exclusive):
             raise ValueError(
                 f"fold escapes IS window: {(train_start, train_end, val_start, val_end)}"
             )
@@ -81,10 +87,17 @@ def _suggest(trial, strategy: str) -> dict:
 
 
 def tune(ch_client, strategy: str, symbol: str, n_trials: int = 60,
-         seed: int = 42, fee: float = DEFAULT_FEE) -> dict:
-    """Walk-forward tune one (strategy, symbol). Upserts tuned_params. Returns the record."""
+         seed: int = 42, fee: float = DEFAULT_FEE,
+         is_start: datetime = _IS_START, is_end_exclusive: datetime = _IS_END_EXCLUSIVE,
+         valid_from: datetime | None = None) -> dict:
+    """Walk-forward tune one (strategy, symbol); publish a versioned row.
+
+    ``valid_from`` defaults to ``is_end_exclusive`` (the deploy boundary), so
+    re-running the fixed-IS tune is idempotent; rolling re-tunes pass the
+    actual deploy time.
+    """
     base_strategy = strategy.removeprefix("TEST_")
-    folds = walk_forward_folds()
+    folds = walk_forward_folds(is_start, is_end_exclusive)
     fold_params, fold_train_sharpes, fold_val_sharpes = [], [], []
     for train_start, _, val_start, val_end in folds:
         try:
@@ -118,9 +131,10 @@ def tune(ch_client, strategy: str, symbol: str, n_trials: int = 60,
     ch_client.insert(
         f"{database_name()}.tuned_params",
         [[strategy, symbol, json.dumps(record["params"]), record["train_sharpe"],
-          record["validation_sharpe"], record["folds"], datetime.now(timezone.utc)]],
+          record["validation_sharpe"], record["folds"], datetime.now(timezone.utc),
+          valid_from if valid_from is not None else is_end_exclusive]],
         column_names=["strategy", "symbol", "params_json", "train_sharpe",
-                      "validation_sharpe", "folds", "tuned_at"],
+                      "validation_sharpe", "folds", "tuned_at", "valid_from"],
     )
     return record
 

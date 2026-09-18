@@ -151,7 +151,9 @@ ENGINE = ReplacingMergeTree
 ORDER BY (run_id, ts)
 """
 
-# One row per (strategy, symbol): re-tuning replaces it.
+# Versioned: one row per (strategy, symbol, valid_from). A rolling re-tune
+# publishes a new version; older versions are kept so paper trading can use the
+# params that were valid at each point in time (walk-forward honesty).
 _TUNED_PARAMS_DDL = """
 CREATE TABLE IF NOT EXISTS {db}.tuned_params
 (
@@ -161,10 +163,11 @@ CREATE TABLE IF NOT EXISTS {db}.tuned_params
     train_sharpe Float32,
     validation_sharpe Float32,
     folds UInt8,
-    tuned_at DateTime64(3)
+    tuned_at DateTime64(3),
+    valid_from DateTime64(3)
 )
 ENGINE = ReplacingMergeTree
-ORDER BY (strategy, symbol)
+ORDER BY (strategy, symbol, valid_from)
 """
 
 # One row per (report_date, section): re-running a day's report replaces it.
@@ -241,6 +244,22 @@ ENGINE = ReplacingMergeTree
 ORDER BY (strategy, symbol)
 """
 
+# Allocation control: whether a sleeve is currently trading, derived causally
+# from its realized trailing-30d return. One row per (strategy, symbol).
+_PAPER_CONTROLS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.paper_controls
+(
+    strategy LowCardinality(String),
+    symbol String,
+    enabled UInt8,
+    trailing_return Float64,
+    as_of DateTime64(3),
+    updated_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (strategy, symbol)
+"""
+
 
 # Sentiment signal evaluation results: one row per (bucket, feature, horizon,
 # method); re-running with more data replaces the row.
@@ -263,15 +282,52 @@ ORDER BY (bucket_size, feature, horizon, method)
 """
 
 
+def _table_exists(client: ClickHouseClient, db: str, table: str) -> bool:
+    rows = client.query(
+        "SELECT count() FROM system.tables WHERE database = {db:String} AND name = {t:String}",
+        parameters={"db": db, "t": table},
+    ).result_rows
+    return bool(rows and rows[0][0] > 0)
+
+
+def _has_column(client: ClickHouseClient, db: str, table: str, column: str) -> bool:
+    rows = client.query(
+        "SELECT count() FROM system.columns "
+        "WHERE database = {db:String} AND table = {t:String} AND name = {c:String}",
+        parameters={"db": db, "t": table, "c": column},
+    ).result_rows
+    return bool(rows and rows[0][0] > 0)
+
+
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
+
+    # Versioned tuned_params migration (pre-valid_from databases): the sort key
+    # changes, so the table must be recreated. Existing rows were tuned on the
+    # fixed IS window and deployed at the OOS start, hence valid_from=2025-01-01.
+    legacy_tuned = _table_exists(client, db, "tuned_params") and \
+        not _has_column(client, db, "tuned_params", "valid_from")
+    if legacy_tuned:
+        client.command(f"RENAME TABLE {db}.tuned_params TO {db}.tuned_params_legacy")
+
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
                 _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL,
-                _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL,
+                _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL, _PAPER_CONTROLS_DDL,
                 _SIGNAL_EVAL_DDL):
         client.command(ddl.format(db=db))
+
+    if legacy_tuned:
+        client.command(
+            f"INSERT INTO {db}.tuned_params "
+            "(strategy, symbol, params_json, train_sharpe, validation_sharpe, folds, tuned_at, valid_from) "
+            "SELECT strategy, symbol, params_json, train_sharpe, validation_sharpe, folds, tuned_at, "
+            "toDateTime64('2025-01-01 00:00:00', 3) "
+            f"FROM {db}.tuned_params_legacy"
+        )
+        client.command(f"DROP TABLE {db}.tuned_params_legacy")
+
     # Idempotent column migration for databases created before Phase 2.1.
     client.command(
         f"ALTER TABLE {db}.sentiment_posts ADD COLUMN IF NOT EXISTS label Nullable(String)"

@@ -58,9 +58,11 @@ def test_paper_query_shapes(ch_client):
     assert data["symbols"] and data["symbols"][0]["symbol"] == "BTC"
     assert set(data["summary"]) == {"total_return", "sharpe", "total_trades",
                                     "win_rate", "num_sleeves", "last_bar_ts"}
+    assert {"enabled", "trailing_return"} <= set(data["symbols"][0])
 
     detail = queries.paper_symbol(ch_client, "BTC", strategy=STRATEGY)
     assert detail is not None and detail["status"] == "long"
+    assert {"enabled", "trailing_return"} <= set(detail)
     assert queries.paper_symbol(ch_client, "NOPE", strategy=STRATEGY) is None
 
     curve = queries.paper_equity_curve(ch_client, "BTC", strategy=STRATEGY)

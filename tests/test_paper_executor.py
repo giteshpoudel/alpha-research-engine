@@ -47,3 +47,14 @@ def test_contradictory_signals_are_ignored():
     flat_state = SleeveState()
     state2, trade2, eq2 = step(flat_state, TS, 90.0, False, True, FEE)
     assert trade2 is None and state2.status == "flat" and eq2.equity == 1.0
+
+
+def test_disabled_blocks_entries_and_force_closes():
+    flat = step(SleeveState(), TS, 100.0, True, False, FEE, enabled=False)
+    state, trade, eq = flat
+    assert trade is None and state.status == "flat" and eq.equity == 1.0
+
+    long_state = SleeveState("long", 100.0, TS, 0.01, 0.0, 1.0)
+    state2, trade2, _ = step(long_state, TS, 110.0, False, False, FEE, enabled=False)
+    assert trade2.side == "exit" and trade2.reason == "halted"
+    assert state2.status == "flat"

@@ -60,6 +60,50 @@ def test_resolve_params_falls_back_to_defaults(ch_client):
     assert runner.resolve_params(ch_client, STRATEGY, "LTC") == dict(mean_reversion.MR_DEFAULTS)
 
 
+def test_signal_series_uses_time_appropriate_params(ch_client):
+    from datetime import timedelta
+
+    from src.backtesting.data import load_ohlcv
+
+    v1 = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    v2 = datetime(2025, 2, 1, tzinfo=timezone.utc)
+    # v1 enters readily; v2's z_entry is unreachable, so it never enters.
+    ch_client.insert(
+        f"{database_name()}.tuned_params",
+        [[STRATEGY, "BTC", json.dumps({"window": 24, "z_entry": -1.0, "z_exit": 0.0}),
+          1.0, 1.0, 8, datetime.now(timezone.utc), v1],
+         [STRATEGY, "BTC", json.dumps({"window": 24, "z_entry": -99.0, "z_exit": 0.0}),
+          1.0, 1.0, 8, datetime.now(timezone.utc), v2]],
+        column_names=["strategy", "symbol", "params_json", "train_sharpe",
+                      "validation_sharpe", "folds", "tuned_at", "valid_from"],
+    )
+    prices = load_ohlcv(ch_client, "BTC", interval="1h", start=v1,
+                        end=v1 + timedelta(days=90))["close"]
+    entries, _ = runner._signal_series(ch_client, STRATEGY, "BTC", prices)
+    assert entries.loc[:v2].any()
+    assert not entries.loc[v2:].any()
+
+
+def test_trailing_return_is_causal(ch_client):
+    from datetime import timedelta
+
+    base = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    # At as_of, the last known equity is 0.8 and the point 30d earlier is 1.0.
+    series = [(base, 1.0), (base + timedelta(days=31), 0.8)]
+    assert runner._trailing_return(series, base + timedelta(days=31)) == pytest.approx(-0.2)
+    assert runner._trailing_return([(base, 1.0)], base) is None  # no point <= cutoff
+
+
+def test_replay_writes_control(ch_client):
+    runner.replay(ch_client, STRATEGY, "LTC", START, END)
+    rows = ch_client.query(
+        f"SELECT enabled, trailing_return FROM {database_name()}.paper_controls FINAL "
+        "WHERE strategy = {s:String} AND symbol = 'LTC'",
+        parameters={"s": STRATEGY},
+    ).result_rows
+    assert rows and rows[0][0] == 1  # <30d history → enabled by default
+
+
 def test_resolve_params_uses_tuned(ch_client):
     params = {"window": 36, "z_entry": -2.2, "z_exit": 0.2}
     ch_client.insert(

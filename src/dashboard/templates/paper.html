@@ -21,19 +21,20 @@
   <thead>
     <tr>
       <th>Symbol</th><th>Status</th><th>Entry</th><th>Mark</th><th>Equity</th>
-      <th>Return</th><th>PnL</th><th>Trades</th><th>Win Rate</th><th>Last Bar</th>
+      <th>Return</th><th>PnL</th><th>Trailing 30d</th><th>Trades</th><th>Win Rate</th><th>Last Bar</th>
     </tr>
   </thead>
   <tbody>
     {% for row in symbols %}
     <tr>
       <td><a href="/paper/{{ row.symbol }}">{{ row.symbol }}</a></td>
-      <td>{{ row.status }}</td>
+      <td>{{ row.status }}{% if not row.enabled %} <span class="tag prelim">halted</span>{% endif %}</td>
       <td>{{ "%.4f"|format(row.entry_price) }}</td>
       <td>{{ "%.4f"|format(row.mark_price) }}</td>
       <td>{{ "%.3f"|format(row.equity) }}</td>
       <td>{{ "%.3f"|format(row.total_return) }}</td>
       <td>{{ "%.3f"|format(row.pnl) }}</td>
+      <td>{{ "%.3f"|format(row.trailing_return) }}</td>
       <td>{{ row.num_trades }}</td>
       <td>{{ "%.3f"|format(row.win_rate) }}</td>
       <td class="muted">{{ row.last_bar_ts }}</td>

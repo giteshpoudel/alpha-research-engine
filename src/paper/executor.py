@@ -47,29 +47,34 @@ class EquityRow:
 
 
 def step(state: SleeveState, bar_ts: datetime, close: float,
-         entry_sig: bool, exit_sig: bool, fee: float) -> tuple[SleeveState, Trade | None, EquityRow]:
+         entry_sig: bool, exit_sig: bool, fee: float,
+         enabled: bool = True) -> tuple[SleeveState, Trade | None, EquityRow]:
     """Advance one sleeve over one closed bar.
 
     Long-only, all-in: entry deploys the entire cash balance; exit liquidates
     the entire position. A signal that contradicts the current state is
     ignored (matching VectorBT ``from_signals`` semantics). Fills are assumed
     at this bar's close.
+
+    When ``enabled`` is False (allocation halt), no entries are taken and any
+    open long is force-closed (reason ``halted``).
     """
     trade: Trade | None = None
 
     if state.status == "flat":
-        if entry_sig:
+        if entry_sig and enabled:
             cost = state.cash
             fee_amt = cost * fee
             size = (cost - fee_amt) / close
             state = SleeveState("long", close, bar_ts, size, 0.0, cost)
             trade = Trade("entry", bar_ts, close, size, cost, fee_amt, 0.0, "entry")
-    elif exit_sig:
+    elif exit_sig or not enabled:
         gross = state.size * close
         fee_amt = gross * fee
         proceeds = gross - fee_amt
+        reason = "exit" if exit_sig else "halted"
         trade = Trade("exit", bar_ts, close, state.size, gross, fee_amt,
-                      proceeds - state.cost_basis, "exit")
+                      proceeds - state.cost_basis, reason)
         state = SleeveState("flat", 0.0, None, 0.0, proceeds, 0.0)
 
     position_value = state.size * close if state.status == "long" else 0.0

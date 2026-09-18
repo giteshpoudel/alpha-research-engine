@@ -235,11 +235,25 @@ def test_tuned_params_table(ch_client):
     assert cols["validation_sharpe"] == "Float32"
     assert cols["folds"] == "UInt8"
     assert cols["tuned_at"] == "DateTime64(3)"
+    assert cols["valid_from"] == "DateTime64(3)"
     engine = ch_client.query(
-        "SELECT engine FROM system.tables WHERE database = {db:String} AND name = 'tuned_params'",
+        "SELECT engine, sorting_key FROM system.tables "
+        "WHERE database = {db:String} AND name = 'tuned_params'",
         parameters={"db": database_name()},
     ).result_rows
     assert "ReplacingMergeTree" in engine[0][0]
+    assert "valid_from" in engine[0][1]
+
+
+def test_paper_controls_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.paper_controls").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["strategy"] == "LowCardinality(String)"
+    assert cols["symbol"] == "String"
+    assert cols["enabled"] == "UInt8"
+    assert cols["trailing_return"] == "Float64"
+    assert cols["as_of"] == "DateTime64(3)"
+    assert cols["updated_at"] == "DateTime64(3)"
 
 
 def test_research_reports_table(ch_client):

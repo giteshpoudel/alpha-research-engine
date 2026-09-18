@@ -2,7 +2,7 @@
 
 An autonomous quantitative research and portfolio analysis system for crypto markets. It ingests market time-series and social sentiment, scores sentiment with local embeddings, computes rolling signal metrics, and backtests trading strategies with strict train/test separation — all on local infrastructure you control.
 
-> **Status:** Active development. Phases 1–5 complete (storage, sentiment pipeline, backtesting, LangGraph research agents, meta-learning) plus a monitoring dashboard, paper-trading forward simulation, and a sentiment signal-evaluation harness. Research/backtesting/paper-trading only — no live exchange execution.
+> **Status:** Active development. Phases 1–5 complete (storage, sentiment pipeline, backtesting, LangGraph research agents, meta-learning) plus a monitoring dashboard, paper-trading forward simulation, a sentiment signal-evaluation harness, and a rolling re-tune feedback loop. Research/backtesting/paper-trading only — no live exchange execution.
 
 ## What it does
 
@@ -96,6 +96,12 @@ python -m src.paper.runner --replay --from 2025-01-01   # rebuild history
 python -m src.paper.runner --once                       # hourly top-up + step
 ```
 
+**Feedback loop** (rolling re-tune on a 36-month IS window with a 7-day embargo; monthly):
+
+```bash
+python -m src.meta_learning.retune            # publish a new param version
+```
+
 **Signal evaluation** (does the social/news feed predict forward returns?):
 
 ```bash
@@ -109,7 +115,7 @@ python -m src.research.signal_eval --no-store  # print only
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (153 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (162 tests; integration tests need the Docker stack up).
 
 ## How it works
 
@@ -144,6 +150,7 @@ tests/          # 141 tests: unit + integration against live services
 - [x] **Dashboard** — web UI for backtest results and paper trading
 - [x] **Paper trading** — forward simulation of tuned Mean Reversion on live data
 - [x] **Signal evaluation** — predictive IC / event study for the social feed
+- [x] **Feedback loop** — rolling re-tune (versioned params) + per-symbol allocation gating
 - [ ] **Live trading** — order routing / execution (out of scope for now)
 - [ ] **Historical social dataset** — extends sentiment backtests before 2026
 

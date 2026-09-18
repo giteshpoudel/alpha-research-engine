@@ -194,11 +194,19 @@ def paper_summary(client, db: str | None = None,
             parameters=params,
         ).result_rows
     }
+    controls = {
+        r[0]: (bool(r[1]), float(r[2])) for r in client.query(
+            f"SELECT symbol, enabled, trailing_return "
+            f"FROM {dbn}.paper_controls FINAL WHERE {clause}",
+            parameters=params,
+        ).result_rows
+    }
 
     symbols: list[dict] = []
     for symbol, first_equity, last_equity, mark_price, status, last_bar_ts in equity_rows:
         pos = positions.get(symbol)
         num_trades, wins, exits = trade_stats.get(symbol, (0, 0, 0))
+        enabled, trailing = controls.get(symbol, (True, 0.0))
         first_equity = float(first_equity)
         last_equity = float(last_equity)
         symbols.append({
@@ -212,6 +220,8 @@ def paper_summary(client, db: str | None = None,
             "pnl": last_equity - 1.0,
             "num_trades": num_trades,
             "win_rate": (wins / exits) if exits else 0.0,
+            "enabled": enabled,
+            "trailing_return": trailing,
             "last_bar_ts": last_bar_ts,
         })
 
@@ -269,6 +279,11 @@ def paper_symbol(client, symbol: str, db: str | None = None,
         f"WHERE {clause} AND symbol = {{symbol:String}} LIMIT 1",
         parameters=params,
     ).result_rows
+    ctrl = client.query(
+        f"SELECT enabled, trailing_return FROM {dbn}.paper_controls FINAL "
+        f"WHERE {clause} AND symbol = {{symbol:String}} LIMIT 1",
+        parameters=params,
+    ).result_rows
     first_equity = float(first_equity)
     last_equity = float(last_equity)
     return {
@@ -280,6 +295,8 @@ def paper_symbol(client, symbol: str, db: str | None = None,
         "equity": last_equity,
         "total_return": (last_equity / first_equity - 1.0) if first_equity else 0.0,
         "pnl": last_equity - 1.0,
+        "enabled": bool(ctrl[0][0]) if ctrl else True,
+        "trailing_return": float(ctrl[0][1]) if ctrl else 0.0,
         "last_bar_ts": last_bar_ts,
     }
 
