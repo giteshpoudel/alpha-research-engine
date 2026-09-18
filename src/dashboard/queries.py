@@ -330,3 +330,22 @@ def paper_trades(client, symbol: str, db: str | None = None,
         dict(zip(("side", "ts", "price", "size", "notional", "fee", "realized_pnl"), row))
         for row in rows
     ]
+
+
+# ---------- Signal evaluation ----------
+
+
+def signal_results(client, db: str | None = None) -> list[dict]:
+    rows = client.query(
+        f"""
+        SELECT bucket_size, feature, horizon, method, value, n, tstat,
+               insufficient, detail, computed_at
+        FROM {_db(db)}.signal_eval_results FINAL
+        ORDER BY method, bucket_size, feature, horizon
+        """
+    ).result_rows
+    return [
+        dict(zip(("bucket_size", "feature", "horizon", "method", "value", "n",
+                  "tstat", "insufficient", "detail", "computed_at"), row))
+        for row in rows
+    ]

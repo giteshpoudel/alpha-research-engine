@@ -30,6 +30,40 @@ def test_collect_risk_data(ch_client):
     assert len(data["signal_states"]) == 12
 
 
+def test_params_for_symbol_falls_back_and_uses_tuned(ch_client):
+    import json
+    from datetime import datetime, timezone
+
+    from src.ingestion.schemas import database_name
+
+    assert collectors._params_for_symbol(ch_client, "NOPE") == collectors.MR_DEFAULTS
+    params = {"window": 12, "z_entry": -1.5, "z_exit": 0.25}
+    ch_client.insert(
+        f"{database_name()}.tuned_params",
+        [["TEST_mean_reversion", "BTC", json.dumps(params), 1.0, 1.0, 8,
+          datetime.now(timezone.utc)]],
+        column_names=["strategy", "symbol", "params_json", "train_sharpe",
+                      "validation_sharpe", "folds", "tuned_at"],
+    )
+    try:
+        assert collectors._params_for_symbol(
+            ch_client, "BTC", strategy="TEST_mean_reversion") == params
+    finally:
+        ch_client.command(
+            f"ALTER TABLE {database_name()}.tuned_params DELETE WHERE strategy LIKE 'TEST%'",
+            settings={"mutations_sync": 1},
+        )
+
+
+def test_z_state_honors_params():
+    import pandas as pd
+
+    close = pd.Series([10.0, 10.0, 10.0, 1.0])
+    state, z = collectors._z_state(close, {"window": 2, "z_entry": -1.0, "z_exit": 0.0})
+    assert state == "in"
+    assert z <= -1.0
+
+
 def test_collect_macro_data(ch_client):
     data = collectors.collect_macro_data(ch_client)
     assert set(data) == {"sentiment", "price_changes_24h", "funding_extremes", "top_posts"}

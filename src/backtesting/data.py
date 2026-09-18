@@ -19,6 +19,8 @@ WINDOWS: dict[str, tuple[datetime, datetime | None]] = {
     "PRELIM": (datetime(2026, 8, 25, tzinfo=timezone.utc), None),
 }
 
+BUCKET_SECONDS = {"5m": 300, "1h": 3600, "24h": 86400}
+
 
 def _time_filter(start, end):
     clauses, params = [], {}
@@ -107,7 +109,9 @@ def load_sentiment(ch_client, symbol: str, bucket: str = "1h") -> pd.DataFrame:
     if not rows:
         raise ValueError(f"no sentiment metrics for {symbol} {bucket}")
     df = pd.DataFrame(rows, columns=["ts", "weighted_score", "velocity", "engagement_ratio"])
-    df.index = _utc_index(df.pop("ts"))
+    # A bucket is only knowable once it closes: index at bucket end, not start,
+    # so consumers (e.g. sentiment_momentum) can never read an unclosed bucket.
+    df.index = _utc_index(df.pop("ts")) + pd.Timedelta(seconds=BUCKET_SECONDS[bucket])
     return df
 
 

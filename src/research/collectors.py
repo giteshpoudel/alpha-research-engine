@@ -15,6 +15,7 @@ from src.backtesting.data import load_ohlcv
 from src.backtesting.strategies.mean_reversion import MR_DEFAULTS
 from src.ingestion.schemas import database_name
 from src.ingestion.tickers import TICKER_ALIASES
+from src.meta_learning.params import get_tuned_params
 
 _LOOKBACK_DAYS = 30
 
@@ -34,12 +35,19 @@ def _returns_30d(ch_client, symbol: str) -> pd.Series:
     return close.pct_change().dropna()
 
 
-def _z_state(close: pd.Series) -> tuple[str, float]:
-    window = MR_DEFAULTS["window"]
+def _params_for_symbol(ch_client, symbol: str, strategy: str = "mean_reversion") -> dict:
+    """Tuned params for the symbol, falling back to strategy defaults."""
+    tuned = get_tuned_params(ch_client, strategy, symbol)
+    return dict(tuned) if tuned else dict(MR_DEFAULTS)
+
+
+def _z_state(close: pd.Series, params: dict | None = None) -> tuple[str, float]:
+    params = params or MR_DEFAULTS
+    window = params["window"]
     ma = close.rolling(window).mean()
     sd = close.rolling(window).std(ddof=0)
     z = float((close.iloc[-1] - ma.iloc[-1]) / sd.iloc[-1]) if sd.iloc[-1] else 0.0
-    return ("in" if z <= MR_DEFAULTS["z_entry"] else "out"), z
+    return ("in" if z <= params["z_entry"] else "out"), z
 
 
 def collect_risk_data(ch_client) -> dict:
@@ -68,7 +76,7 @@ def collect_risk_data(ch_client) -> dict:
         try:
             start = datetime.now(timezone.utc) - timedelta(days=7)
             close = load_ohlcv(ch_client, symbol, start=start)["close"]
-            state, z = _z_state(close)
+            state, z = _z_state(close, _params_for_symbol(ch_client, symbol))
             signal_states.append({"symbol": symbol, "state": state, "z": round(z, 3)})
         except ValueError:
             signal_states.append({"symbol": symbol, "state": "out", "z": 0.0})

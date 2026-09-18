@@ -91,3 +91,18 @@ def test_load_funding_is_hyperliquid_only(ch_client):
                      start=datetime(2023, 5, 12, tzinfo=timezone.utc),
                      end=datetime(2023, 5, 13, tzinfo=timezone.utc))
     assert len(s) > 0
+
+
+def test_load_sentiment_indexes_at_bucket_end(ch_client):
+    import pandas as pd
+
+    raw = ch_client.query(
+        f"SELECT min(bucket_start) FROM {database_name()}.sentiment_metrics FINAL "
+        "WHERE ticker = 'BTC' AND bucket_size = '1h'"
+    ).result_rows[0][0]
+    assert raw is not None
+    expected = raw + pd.Timedelta(hours=1)
+    if expected.tzinfo is None:
+        expected = expected.replace(tzinfo=timezone.utc)
+    df = load_sentiment(ch_client, "BTC", bucket="1h")
+    assert df.index.min() == expected  # knowable only at bucket end (no lookahead)

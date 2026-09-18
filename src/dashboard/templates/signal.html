@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Signal · Alpha Research{% endblock %}
+{% block content %}
+<h1>Sentiment Signal</h1>
+<p class="muted">
+  Predictive diagnostics for the social/news feed — IC and quantile forward-return spreads.
+  Small samples are flagged <span class="tag">insufficient</span>; read this as an evidence
+  baseline, not a verdict.
+</p>
+
+{% if not has_data %}
+  <p class="muted">No evaluation stored yet — run <code>python -m src.research.signal_eval</code>.</p>
+{% else %}
+
+<h2>Coverage</h2>
+<table>
+  <thead><tr><th>Bucket</th><th>Rows</th><th>Tickers</th><th>Start</th><th>End</th></tr></thead>
+  <tbody>
+    {% for row in coverage %}
+      {% if row.bucket_size != '*' %}
+      <tr>
+        <td>{{ row.bucket_size }}</td>
+        <td>{{ row.n }}</td>
+        <td>{{ row.detail.tickers }}</td>
+        <td class="muted">{{ row.detail.start }}</td>
+        <td class="muted">{{ row.detail.end }}</td>
+      </tr>
+      {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Posts by source</h2>
+<table>
+  <thead><tr><th>Source</th><th>Posts</th><th>Scored</th><th>Start</th><th>End</th></tr></thead>
+  <tbody>
+    {% for row in coverage %}
+      {% for s in row.detail.sources or [] %}
+      <tr>
+        <td>{{ s.source }}</td><td>{{ s.posts }}</td><td>{{ s.scored }}</td>
+        <td class="muted">{{ s.start }}</td><td class="muted">{{ s.end }}</td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Predictive statistics</h2>
+<p class="muted">Pooled IC significance uses a block bootstrap (overlapping horizons). Quantile t-stats are naive/indicative.</p>
+<table>
+  <thead>
+    <tr>
+      <th>Method</th><th>Bucket</th><th>Feature</th><th>Horizon</th>
+      <th>Value</th><th>n</th><th>t</th><th>Flag</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in stats %}
+    <tr>
+      <td>{{ row.method }}</td>
+      <td>{{ row.bucket_size }}</td>
+      <td>{{ row.feature }}</td>
+      <td>{{ row.horizon }}</td>
+      <td>{{ "%.3f"|format(row.value) }}</td>
+      <td>{{ row.n }}</td>
+      <td>{{ "%.2f"|format(row.tstat) }}</td>
+      <td>{% if row.insufficient %}<span class="tag prelim">insufficient</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endif %}
+{% endblock %}

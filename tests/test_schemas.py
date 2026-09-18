@@ -280,3 +280,18 @@ def test_paper_positions_table(ch_client):
     assert cols["cost_basis"] == "Float64"
     assert cols["last_bar_ts"] == "DateTime64(3)"
     assert cols["updated_at"] == "DateTime64(3)"
+
+
+def test_signal_eval_results_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.signal_eval_results").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["bucket_size"] == "LowCardinality(String)"
+    assert cols["feature"] == "LowCardinality(String)"
+    assert cols["horizon"] == "LowCardinality(String)"
+    assert cols["method"] == "LowCardinality(String)"
+    assert cols["value"] == "Float64"
+    assert cols["n"] == "UInt32"
+    assert cols["tstat"] == "Float64"
+    assert cols["insufficient"] == "UInt8"
+    assert cols["detail"] == "String"
+    assert cols["computed_at"] == "DateTime64(3)"

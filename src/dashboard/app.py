@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import clickhouse_connect
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -37,6 +39,15 @@ def _fmt_rows(rows):
 
 def _fmt_dict(row):
     return {k: (_fmt(v) if isinstance(v, float) else v) for k, v in row.items()}
+
+
+def _signal_view(rows):
+    """Split stored evaluation rows into coverage and statistics, parsing detail JSON."""
+    coverage, stats = [], []
+    for row in rows:
+        item = {**row, "detail": json.loads(row["detail"]) if row["detail"] else {}}
+        (coverage if row["method"] == "coverage" else stats).append(item)
+    return coverage, stats
 
 
 def create_app() -> FastAPI:
@@ -180,6 +191,24 @@ def create_app() -> FastAPI:
         return [
             {"ts": str(p["ts"]), "equity": p["equity"]}
             for p in queries.paper_equity_curve(client, symbol, db=db)
+        ]
+
+    @app.get("/signal", response_class=HTMLResponse)
+    def signal_page(request: Request):
+        client, db = _conn()
+        coverage, stats = _signal_view(queries.signal_results(client, db=db))
+        return templates.TemplateResponse(
+            request, "signal.html",
+            {"request": request, "active": "signal",
+             "coverage": coverage, "stats": stats, "has_data": bool(coverage or stats)},
+        )
+
+    @app.get("/api/signal")
+    def api_signal():
+        client, db = _conn()
+        return [
+            {k: (str(v) if hasattr(v, "isoformat") else v) for k, v in row.items()}
+            for row in queries.signal_results(client, db=db)
         ]
 
     return app

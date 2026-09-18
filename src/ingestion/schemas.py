@@ -242,13 +242,35 @@ ORDER BY (strategy, symbol)
 """
 
 
+# Sentiment signal evaluation results: one row per (bucket, feature, horizon,
+# method); re-running with more data replaces the row.
+_SIGNAL_EVAL_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.signal_eval_results
+(
+    bucket_size LowCardinality(String),
+    feature LowCardinality(String),
+    horizon LowCardinality(String),
+    method LowCardinality(String),
+    value Float64,
+    n UInt32,
+    tstat Float64,
+    insufficient UInt8,
+    detail String,
+    computed_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (bucket_size, feature, horizon, method)
+"""
+
+
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
     client.command(f"CREATE DATABASE IF NOT EXISTS {db}")
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
                 _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL,
-                _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL):
+                _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL,
+                _SIGNAL_EVAL_DDL):
         client.command(ddl.format(db=db))
     # Idempotent column migration for databases created before Phase 2.1.
     client.command(
