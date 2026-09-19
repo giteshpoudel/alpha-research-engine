@@ -86,15 +86,13 @@ def _suggest(trial, strategy: str) -> dict:
     }
 
 
-def tune(ch_client, strategy: str, symbol: str, n_trials: int = 60,
-         seed: int = 42, fee: float = DEFAULT_FEE,
-         is_start: datetime = _IS_START, is_end_exclusive: datetime = _IS_END_EXCLUSIVE,
-         valid_from: datetime | None = None) -> dict:
-    """Walk-forward tune one (strategy, symbol); publish a versioned row.
+def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
+        seed: int = 42, fee: float = DEFAULT_FEE,
+        is_start: datetime = _IS_START, is_end_exclusive: datetime = _IS_END_EXCLUSIVE
+        ) -> tuple[dict, list]:
+    """Walk-forward tune one (strategy, symbol). Returns (record, folds).
 
-    ``valid_from`` defaults to ``is_end_exclusive`` (the deploy boundary), so
-    re-running the fixed-IS tune is idempotent; rolling re-tunes pass the
-    actual deploy time.
+    Does not publish; the caller decides (champion/challenger adoption).
     """
     base_strategy = strategy.removeprefix("TEST_")
     folds = walk_forward_folds(is_start, is_end_exclusive)
@@ -128,14 +126,56 @@ def tune(ch_client, strategy: str, symbol: str, n_trials: int = 60,
         "validation_sharpe": sum(fold_val_sharpes) / len(fold_val_sharpes),
         "folds": len(fold_params),
     }
+    return record, folds
+
+
+def publish(ch_client, strategy: str, symbol: str, record: dict, valid_from: datetime) -> None:
+    """Insert a versioned tuned_params row."""
     ch_client.insert(
         f"{database_name()}.tuned_params",
         [[strategy, symbol, json.dumps(record["params"]), record["train_sharpe"],
           record["validation_sharpe"], record["folds"], datetime.now(timezone.utc),
-          valid_from if valid_from is not None else is_end_exclusive]],
+          valid_from]],
         column_names=["strategy", "symbol", "params_json", "train_sharpe",
                       "validation_sharpe", "folds", "tuned_at", "valid_from"],
     )
+
+
+def validate_params(ch_client, strategy: str, symbol: str, params: dict,
+                    folds: list, fee: float = DEFAULT_FEE) -> float | None:
+    """Mean validation Sharpe of a fixed param set over the given folds."""
+    base_strategy = strategy.removeprefix("TEST_")
+    values = []
+    for _, _, val_start, val_end in folds:
+        try:
+            data = _load_train_data(ch_client, base_strategy, symbol, val_start, val_end)
+        except ValueError:
+            continue
+        values.append(float(_run(data, base_strategy, params, fee).sharpe))
+    return sum(values) / len(values) if values else None
+
+
+def adopt_candidate(candidate_val: float | None, incumbent_val: float | None) -> bool:
+    """Champion/challenger: adopt only if the candidate is not worse."""
+    if incumbent_val is None:
+        return True
+    if candidate_val is None:
+        return False
+    return candidate_val >= incumbent_val
+
+
+def tune(ch_client, strategy: str, symbol: str, n_trials: int = 60,
+         seed: int = 42, fee: float = DEFAULT_FEE,
+         is_start: datetime = _IS_START, is_end_exclusive: datetime = _IS_END_EXCLUSIVE,
+         valid_from: datetime | None = None) -> dict:
+    """Tune and publish unconditionally (used for the initial fixed-IS tune).
+
+    ``valid_from`` defaults to ``is_end_exclusive``, so re-running is idempotent.
+    """
+    record, _ = fit(ch_client, strategy, symbol, n_trials=n_trials, seed=seed, fee=fee,
+                    is_start=is_start, is_end_exclusive=is_end_exclusive)
+    publish(ch_client, strategy, symbol, record,
+            valid_from if valid_from is not None else is_end_exclusive)
     return record
 
 

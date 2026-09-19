@@ -16,7 +16,15 @@ from datetime import datetime, timedelta, timezone
 
 from src.ingestion.schemas import get_clickhouse_client
 from src.ingestion.tickers import TICKER_ALIASES
-from src.meta_learning.tuner import TUNABLE_STRATEGIES, add_months, tune
+from src.meta_learning.params import get_tuned_params
+from src.meta_learning.tuner import (
+    TUNABLE_STRATEGIES,
+    add_months,
+    adopt_candidate,
+    fit,
+    publish,
+    validate_params,
+)
 
 DEFAULT_EMBARGO_DAYS = 7
 DEFAULT_MONTHS = 36
@@ -41,11 +49,27 @@ def run_retune(ch_client, symbols: tuple[str, ...] | None = None,
     for strategy in TUNABLE_STRATEGIES:
         for symbol in symbols:
             try:
-                record = tune(ch_client, strategy, symbol, n_trials=n_trials,
-                              is_start=is_start, is_end_exclusive=is_end, valid_from=deploy)
-                results[f"{strategy} {symbol}"] = record
-                print(f"{strategy} {symbol}: {record['params']} "
-                      f"(val sharpe {record['validation_sharpe']:.3f})")
+                candidate, folds = fit(ch_client, strategy, symbol, n_trials=n_trials,
+                                       is_start=is_start, is_end_exclusive=is_end)
+                # Champion/challenger: compare candidate and incumbent on the
+                # SAME validation folds (a candidate only wins if it is not
+                # worse than the live params on a like-for-like basis).
+                candidate_val = validate_params(ch_client, strategy, symbol, candidate["params"], folds)
+                incumbent = get_tuned_params(ch_client, strategy, symbol, as_of=deploy)
+                incumbent_val = (validate_params(ch_client, strategy, symbol, incumbent, folds)
+                                 if incumbent else None)
+                if adopt_candidate(candidate_val, incumbent_val):
+                    publish(ch_client, strategy, symbol, candidate, deploy)
+                    verdict = "ADOPTED"
+                else:
+                    verdict = "rejected"
+                results[f"{strategy} {symbol}"] = {
+                    "adopted": verdict == "ADOPTED", "candidate": candidate,
+                    "candidate_val": candidate_val, "incumbent_val": incumbent_val,
+                }
+                print(f"{strategy} {symbol}: {verdict} "
+                      f"(candidate {candidate_val:+.3f} vs incumbent "
+                      f"{'none' if incumbent_val is None else f'{incumbent_val:+.3f}'})")
             except Exception as exc:
                 print(f"{strategy} {symbol}: FAILED: {exc}")
     return results

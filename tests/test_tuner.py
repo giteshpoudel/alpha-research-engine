@@ -63,6 +63,26 @@ def test_walk_forward_folds_respects_custom_bounds():
         assert val_end <= is_end
 
 
+def test_adopt_candidate_rules():
+    from src.meta_learning.tuner import adopt_candidate
+
+    assert adopt_candidate(0.5, None) is True    # no incumbent -> adopt
+    assert adopt_candidate(0.5, 0.4) is True      # better -> adopt
+    assert adopt_candidate(0.5, 0.5) is True      # tie -> keep challenger
+    assert adopt_candidate(0.4, 0.5) is False     # worse -> reject
+    assert adopt_candidate(None, 0.5) is False    # candidate undefined -> reject
+
+
+def test_validate_params_on_one_fold():
+    from src.backtesting.strategies.mean_reversion import MR_DEFAULTS
+    from src.meta_learning.tuner import validate_params
+
+    ch = get_clickhouse_client()
+    folds = walk_forward_folds()[-1:]  # single fold keeps it fast
+    value = validate_params(ch, "mean_reversion", "BTC", dict(MR_DEFAULTS), folds)
+    assert value is not None
+
+
 def test_retune_window_honors_embargo():
     now = datetime(2026, 10, 1, 3, 30, tzinfo=timezone.utc)
     deploy, is_start, is_end = retune_window(now, embargo_days=7, months=36)
