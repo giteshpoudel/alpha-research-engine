@@ -6,11 +6,29 @@ max 4 attempts). Any other >=400 status raises immediately.
 
 from __future__ import annotations
 
+import os
 import time
 
 import httpx
 
 USER_AGENT = "alpha-research-engine/0.1 (local quant research)"
+
+
+def ollama_base_url() -> str:
+    """Normalize OLLAMA_HOST into a full base URL (default port 11434).
+
+    Accepts ``host``, ``host:port``, or a full ``http(s)://...`` URL, so a
+    misconfigured value can't produce ``http://http://host:11434:11434``.
+    """
+    raw = os.environ.get("OLLAMA_HOST", "localhost").strip()
+    for scheme in ("http://", "https://"):
+        raw = raw.removeprefix(scheme)
+    raw = raw.strip("/")
+    if not raw:
+        raw = "localhost"
+    if ":" not in raw:
+        raw = f"{raw}:11434"
+    return f"http://{raw}"
 
 
 def get_with_backoff(

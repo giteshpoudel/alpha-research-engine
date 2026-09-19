@@ -2,6 +2,11 @@
 {% block title %}Backtesting · Alpha Research{% endblock %}
 {% block content %}
 <h1>Backtesting overview</h1>
+<p class="muted">
+  Freshness — ohlcv: {{ freshness.ohlcv_latest }} · sentiment: {{ freshness.sentiment_latest }}
+  · paper: {{ freshness.paper_latest }} · signal: {{ freshness.signal_eval_latest }}
+  · report: {{ freshness.report_latest }}
+</p>
 <table>
   <thead>
     <tr>

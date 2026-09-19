@@ -69,8 +69,11 @@ def create_app() -> FastAPI:
     def overview_page(request: Request):
         client, db = _conn()
         rows = _fmt_rows(queries.overview(client, db=db))
+        health = queries.system_health(client, db=db)
+        freshness = {k: (str(v) if v is not None else "—") for k, v in health.items()}
         return templates.TemplateResponse(
-            request, "overview.html", {"request": request, "rows": rows}
+            request, "overview.html",
+            {"request": request, "rows": rows, "freshness": freshness},
         )
 
     @app.get("/strategies/{strategy}", response_class=HTMLResponse)
@@ -202,6 +205,14 @@ def create_app() -> FastAPI:
             {"request": request, "active": "signal",
              "coverage": coverage, "stats": stats, "has_data": bool(coverage or stats)},
         )
+
+    @app.get("/api/health")
+    def api_health():
+        client, db = _conn()
+        health = queries.system_health(client, db=db)
+        return {"status": "ok",
+                "freshness": {k: (str(v) if v is not None else None)
+                              for k, v in health.items()}}
 
     @app.get("/api/signal")
     def api_signal():

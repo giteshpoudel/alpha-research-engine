@@ -349,6 +349,29 @@ def paper_trades(client, symbol: str, db: str | None = None,
     ]
 
 
+# ---------- Ops health ----------
+
+
+def system_health(client, db: str | None = None) -> dict:
+    """Latest data timestamp per pipeline stage (freshness monitoring)."""
+    dbn = _db(db)
+
+    def latest(sql: str):
+        rows = client.query(sql).result_rows
+        return rows[0][0] if rows else None
+
+    return {
+        "ohlcv_latest": latest(f"SELECT maxOrNull(ts) FROM {dbn}.ohlcv FINAL"),
+        "sentiment_latest": latest(
+            f"SELECT maxOrNull(bucket_start) FROM {dbn}.sentiment_metrics FINAL"),
+        "paper_latest": latest(f"SELECT maxOrNull(ts) FROM {dbn}.paper_equity FINAL"),
+        "signal_eval_latest": latest(
+            f"SELECT maxOrNull(computed_at) FROM {dbn}.signal_eval_results FINAL"),
+        "report_latest": latest(
+            f"SELECT maxOrNull(created_at) FROM {dbn}.research_reports FINAL"),
+    }
+
+
 # ---------- Signal evaluation ----------
 
 

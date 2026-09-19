@@ -11,13 +11,11 @@ import os
 
 import httpx
 
+from src.ingestion.http import ollama_base_url
+
 KIMI_MODEL = "kimi-k2-0905-preview"
 OLLAMA_MODEL = "deepseek-r1:8b"
 _KIMI_BASE_URL = "https://api.moonshot.ai/v1"
-
-
-def _ollama_host() -> str:
-    return os.environ.get("OLLAMA_HOST", "localhost")
 
 
 def active_model() -> str:
@@ -29,7 +27,7 @@ def _endpoint() -> tuple[str, str, str]:
     key = os.environ.get("MOONSHOT_API_KEY")
     if key:
         return _KIMI_BASE_URL, key, KIMI_MODEL
-    return f"http://{_ollama_host()}:11434/v1", "ollama", OLLAMA_MODEL
+    return f"{ollama_base_url()}/v1", "ollama", OLLAMA_MODEL
 
 
 def chat(system: str, user: str, model: str | None = None,

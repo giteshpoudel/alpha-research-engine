@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from src.ingestion.http import get_with_backoff, post_with_backoff
+from src.ingestion.http import get_with_backoff, ollama_base_url, post_with_backoff
 
 
 def _client(handler):
@@ -88,3 +88,14 @@ def test_post_non_retryable_status_raises_immediately():
     with pytest.raises(RuntimeError, match="403"):
         post_with_backoff("https://example.com/x", json={"a": 1}, client=_client(handler))
     assert len(calls) == 1
+
+
+def test_ollama_base_url_normalization(monkeypatch):
+    monkeypatch.setenv("OLLAMA_HOST", "localhost")
+    assert ollama_base_url() == "http://localhost:11434"
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+    assert ollama_base_url() == "http://localhost:11434"
+    monkeypatch.setenv("OLLAMA_HOST", "host.local:9999/")
+    assert ollama_base_url() == "http://host.local:9999"
+    monkeypatch.setenv("OLLAMA_HOST", "")
+    assert ollama_base_url() == "http://localhost:11434"

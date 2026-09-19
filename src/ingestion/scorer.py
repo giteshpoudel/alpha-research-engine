@@ -9,14 +9,13 @@ payload, then applies scores to ClickHouse in one batched mutation.
 from __future__ import annotations
 
 import math
-import os
 import time
 from datetime import timezone
 
 import httpx
 from qdrant_client.models import PointStruct
 
-from src.ingestion.http import post_with_backoff
+from src.ingestion.http import ollama_base_url, post_with_backoff
 from src.ingestion.schemas import QDRANT_COLLECTION, database_name, post_id_to_uuid
 
 EMBED_MODEL = "nomic-embed-text"
@@ -44,13 +43,9 @@ NEGATIVE_PHRASES = (
 )
 
 
-def _ollama_host() -> str:
-    return os.environ.get("OLLAMA_HOST", "localhost")
-
-
 def _embed(http_client: httpx.Client, texts: list[str]) -> list[list[float]]:
     resp = post_with_backoff(
-        f"http://{_ollama_host()}:11434/api/embed",
+        f"{ollama_base_url()}/api/embed",
         json={"model": EMBED_MODEL, "input": texts},
         client=http_client,
         timeout=120.0,

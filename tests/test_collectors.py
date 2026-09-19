@@ -28,6 +28,8 @@ def test_collect_risk_data(ch_client):
     states = {s["state"] for s in data["signal_states"]}
     assert states <= {"in", "out"}
     assert len(data["signal_states"]) == 12
+    for item in data["tuned_drawdowns"]:
+        assert set(item) == {"symbol", "max_dd"}
 
 
 def test_params_for_symbol_falls_back_and_uses_tuned(ch_client):

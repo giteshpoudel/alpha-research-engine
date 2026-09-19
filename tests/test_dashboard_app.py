@@ -43,6 +43,15 @@ def test_run_page_404(client):
     assert resp.status_code == 404
 
 
+def test_health_endpoint(client):
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert {"ohlcv_latest", "sentiment_latest", "paper_latest",
+            "signal_eval_latest", "report_latest"} <= set(body["freshness"])
+
+
 def test_api_endpoints(client):
     overview = client.get("/api/overview").json()
     assert isinstance(overview, list) and overview

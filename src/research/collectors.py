@@ -6,6 +6,7 @@ stays small and every number is testable.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -46,7 +47,12 @@ def _z_state(close: pd.Series, params: dict | None = None) -> tuple[str, float]:
     window = params["window"]
     ma = close.rolling(window).mean()
     sd = close.rolling(window).std(ddof=0)
-    z = float((close.iloc[-1] - ma.iloc[-1]) / sd.iloc[-1]) if sd.iloc[-1] else 0.0
+    last_sd = sd.iloc[-1]
+    if not (last_sd and math.isfinite(last_sd)):
+        return "out", 0.0
+    z = float((close.iloc[-1] - ma.iloc[-1]) / last_sd)
+    if not math.isfinite(z):
+        return "out", 0.0
     return ("in" if z <= params["z_entry"] else "out"), z
 
 
@@ -59,16 +65,21 @@ def collect_risk_data(ch_client) -> dict:
             continue
     frame = pd.DataFrame(returns).dropna()
     corr = frame.corr()
-    pairs = []
     symbols = list(corr.columns)
+    pairs = []
     for i in range(len(symbols)):
         for j in range(i + 1, len(symbols)):
-            pairs.append({"pair": f"{symbols[i]} vs {symbols[j]}",
-                          "corr": float(corr.iloc[i, j])})
+            value = corr.iloc[i, j]
+            if math.isfinite(value):
+                pairs.append({"pair": f"{symbols[i]} vs {symbols[j]}",
+                              "corr": float(value)})
     pairs.sort(key=lambda p: -p["corr"])
 
-    vols = [{"symbol": s, "ann_vol": float(frame[s].std() * np.sqrt(24 * 365))}
-            for s in symbols]
+    vols = []
+    for s in symbols:
+        vol = float(frame[s].std() * np.sqrt(24 * 365))
+        if math.isfinite(vol):
+            vols.append({"symbol": s, "ann_vol": vol})
     vols.sort(key=lambda v: -v["ann_vol"])
 
     signal_states = []
@@ -81,36 +92,34 @@ def collect_risk_data(ch_client) -> dict:
         except ValueError:
             signal_states.append({"symbol": symbol, "state": "out", "z": 0.0})
 
-    rows = ch_client.query(
+    # Max drawdown over the tuned OOS window, per symbol. One grouped query
+    # (previously this identical query was re-run once per symbol).
+    dd_rows = ch_client.query(
         f"""
-        SELECT symbol, equity FROM (
+        SELECT symbol, min(dd) AS max_dd FROM (
             SELECT r.symbol AS symbol, e.ts AS ts, e.equity AS equity,
-                   row_number() OVER (PARTITION BY r.symbol ORDER BY e.ts DESC) AS rn
+                   max(e.equity) OVER (PARTITION BY r.symbol ORDER BY e.ts
+                                       ROWS UNBOUNDED PRECEDING) AS peak,
+                   e.equity / peak - 1.0 AS dd
             FROM {database_name()}.backtest_equity AS e FINAL
             JOIN {database_name()}.backtest_runs AS r FINAL ON e.run_id = r.run_id
             WHERE r.strategy = 'mean_reversion' AND r.window = 'OOS'
               AND r.params_json LIKE '%"tuned"%' AND NOT startsWith(r.symbol, 'TEST')
-        ) WHERE rn = 1
+        ) GROUP BY symbol
         """
     ).result_rows
-    tuned_drawdowns = []
-    for symbol, latest_equity in rows:
-        dd_rows = ch_client.query(
-            f"""
-            SELECT symbol, min(dd) AS max_dd FROM (
-                SELECT r.symbol AS symbol, e.ts AS ts, e.equity AS equity,
-                       max(e.equity) OVER (PARTITION BY r.symbol ORDER BY e.ts
-                                           ROWS UNBOUNDED PRECEDING) AS peak,
-                       e.equity / peak - 1.0 AS dd
-                FROM {database_name()}.backtest_equity AS e FINAL
-                JOIN {database_name()}.backtest_runs AS r FINAL ON e.run_id = r.run_id
-                WHERE r.strategy = 'mean_reversion' AND r.window = 'OOS'
-                  AND r.params_json LIKE '%"tuned"%' AND NOT startsWith(r.symbol, 'TEST')
-            ) GROUP BY symbol
-            """
-        ).result_rows
-        current_dd = {s: float(d) for s, d in dd_rows}.get(symbol, 0.0)
-        tuned_drawdowns.append({"symbol": symbol, "current_dd": round(current_dd, 4)})
+    max_dd = {s: float(d) for s, d in dd_rows}
+    tuned_symbols = ch_client.query(
+        f"""
+        SELECT DISTINCT r.symbol AS symbol
+        FROM {database_name()}.backtest_runs AS r FINAL
+        WHERE r.strategy = 'mean_reversion' AND r.window = 'OOS'
+          AND r.params_json LIKE '%"tuned"%' AND NOT startsWith(r.symbol, 'TEST')
+        ORDER BY symbol
+        """
+    ).result_rows
+    tuned_drawdowns = [{"symbol": s, "max_dd": round(max_dd.get(s, 0.0), 4)}
+                       for (s,) in tuned_symbols]
 
     return {
         "top_correlated": pairs[:5],
