@@ -10,7 +10,7 @@ An autonomous quantitative research and portfolio analysis system for crypto mar
 - **Scores** every post's sentiment (−1…+1) with embedding-distance against bullish/bearish anchors, using a local Ollama model — deterministic, free, no API keys
 - **Aggregates** rolling metrics (5m/1h/24h): sentiment polarity index, mention velocity, engagement spikes per ticker
 - **Backfills** historical social/news discussion (Hacker News via Algolia, archived to 2006, with real engagement) to extend sentiment analysis before live collection began
-- **Backtests** strategies (Mean Reversion, Funding-Rate Carry, Sentiment-Momentum) on years of data with a strict in-sample/out-of-sample split, and stores results + equity curves for analysis
+- **Backtests** strategies on years of data with a strict in-sample/out-of-sample split, and stores results + equity curves. Mean Reversion is the active edge; Funding-Rate Carry and Sentiment-Momentum are retained for research only (see Notes)
 - **Forward-tests** the tuned Mean Reversion strategy on live data as a paper-trading account (independent $1 sleeve per symbol), surfaced in a dashboard view
 - **Automates research:** Optuna walk-forward tuning, a LangGraph risk/macro/report agent pipeline that also appends deterministic paper-trading and sentiment-signal sections, and a monitoring dashboard
 
@@ -167,6 +167,7 @@ tests/          # 141 tests: unit + integration against live services
 - Binance.com is geo-restricted in some regions; the backfill uses Binance.US (spot) and Hyperliquid (funding). Funding history starts at each coin's Hyperliquid listing (BTC ≈ May 2023).
 - Funding-rate arb assumes zero basis risk (no perp price series) — documented approximation.
 - Sentiment history is limited to when the pipeline started running; see the dataset roadmap item.
+- **Sentiment signal is weak and treated as research/monitoring only.** Polarity is capped by the embedding model (`nomic-embed-text` maps bullish and bearish crypto text to nearly the same region — anchor cosine 0.83, hand-written bull/bear probes span only ±0.13). Predictive IC is small (24h mean polarity vs 24h forward return: +0.13, p=0.04); contrastive anchors and per-ticker normalization were worse. Attention features (`post_count`) show a small contrarian IC (−0.12 at 4h, p=0.004) but an entry/exit overlay on Mean Reversion was a no-op. Funding-Rate Carry loses to fees.
 
 ## Disclaimer
 
