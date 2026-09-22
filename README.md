@@ -143,7 +143,8 @@ src/
   research/     # LangGraph agents + deterministic collectors + daily report
   dashboard/    # FastAPI monitoring app (backtesting + paper trading)
   paper/        # paper-trading forward simulation (executor, store, runner)
-config/         # launchd plists for pipeline, backfill, and paper trading
+config/         # launchd plists: pipeline (5 min), backfill (daily), hackernews (daily),
+                # paper (hourly), retune (monthly), signal_eval + daily report (daily)
 docs/           # blueprint + design specs + implementation plans
 tests/          # 141 tests: unit + integration against live services
 ```
