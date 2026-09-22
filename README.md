@@ -123,7 +123,7 @@ python -m src.research.signal_eval --no-store  # print only
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (179 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (185 tests; integration tests need the Docker stack up).
 
 ## How it works
 
@@ -143,6 +143,7 @@ src/
   research/     # LangGraph agents + deterministic collectors + daily report
   dashboard/    # FastAPI monitoring app (backtesting + paper trading)
   paper/        # paper-trading forward simulation (executor, store, runner)
+  agents/       # autonomous strategy optimizer (symbol classification first)
 config/         # launchd plists: pipeline (5 min), backfill (daily), hackernews (daily),
                 # paper (hourly), retune (monthly), signal_eval + daily report (daily)
 docs/           # blueprint + design specs + implementation plans

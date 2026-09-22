@@ -299,6 +299,24 @@ def _has_column(client: ClickHouseClient, db: str, table: str, column: str) -> b
     return bool(rows and rows[0][0] > 0)
 
 
+# Symbol classification/risk metadata (price bucket + category), one row per
+# symbol; re-classifying replaces it.
+_SYMBOL_METADATA_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.symbol_metadata
+(
+    symbol String,
+    price Float64,
+    price_bucket LowCardinality(String),
+    category LowCardinality(String),
+    ann_vol Float32,
+    pump_risk LowCardinality(String),
+    updated_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (symbol)
+"""
+
+
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
@@ -315,7 +333,7 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
                 _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL,
                 _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL, _PAPER_CONTROLS_DDL,
-                _SIGNAL_EVAL_DDL):
+                _SIGNAL_EVAL_DDL, _SYMBOL_METADATA_DDL):
         client.command(ddl.format(db=db))
 
     if legacy_tuned:

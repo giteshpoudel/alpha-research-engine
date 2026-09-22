@@ -296,6 +296,18 @@ def test_paper_positions_table(ch_client):
     assert cols["updated_at"] == "DateTime64(3)"
 
 
+def test_symbol_metadata_table(ch_client):
+    rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.symbol_metadata").result_rows
+    cols = {r[0]: r[1] for r in rows}
+    assert cols["symbol"] == "String"
+    assert cols["price"] == "Float64"
+    assert cols["price_bucket"] == "LowCardinality(String)"
+    assert cols["category"] == "LowCardinality(String)"
+    assert cols["ann_vol"] == "Float32"
+    assert cols["pump_risk"] == "LowCardinality(String)"
+    assert cols["updated_at"] == "DateTime64(3)"
+
+
 def test_signal_eval_results_table(ch_client):
     rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.signal_eval_results").result_rows
     cols = {r[0]: r[1] for r in rows}
