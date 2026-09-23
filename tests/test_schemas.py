@@ -296,6 +296,17 @@ def test_paper_positions_table(ch_client):
     assert cols["updated_at"] == "DateTime64(3)"
 
 
+def test_strategy_proposals_table(ch_client):
+    cols = {r[0]: r[1] for r in
+            ch_client.query(f"DESCRIBE TABLE {database_name()}.strategy_proposals").result_rows}
+    assert cols["proposal_id"] == "String"
+    assert cols["kind"] == "LowCardinality(String)"
+    assert cols["decision"] == "LowCardinality(String)"
+    assert cols["proposed_change"] == "String"
+    assert cols["decided_at"] == "Nullable(DateTime64(3))"
+    assert cols["created_at"] == "DateTime64(3)"
+
+
 def test_agent_tables(ch_client):
     runs = {r[0]: r[1] for r in
             ch_client.query(f"DESCRIBE TABLE {database_name()}.agent_runs").result_rows}

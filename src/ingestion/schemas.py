@@ -361,6 +361,30 @@ ORDER BY (run_id, step_idx)
 """
 
 
+# Optimizer proposals: an agent's improvement idea, its evidence, and the
+# champion/challenger decision. Re-inserting the same proposal_id updates it.
+_STRATEGY_PROPOSALS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.strategy_proposals
+(
+    proposal_id String,
+    run_id String,
+    kind LowCardinality(String),
+    symbol String,
+    hypothesis String,
+    proposed_change String,
+    baseline String,
+    evidence String,
+    decision LowCardinality(String),
+    reason String,
+    model LowCardinality(String),
+    created_at DateTime64(3),
+    decided_at Nullable(DateTime64(3))
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (proposal_id)
+"""
+
+
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
@@ -377,7 +401,8 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
                 _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL,
                 _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL, _PAPER_CONTROLS_DDL,
-                _SIGNAL_EVAL_DDL, _SYMBOL_METADATA_DDL, _AGENT_RUNS_DDL, _AGENT_STEPS_DDL):
+                _SIGNAL_EVAL_DDL, _SYMBOL_METADATA_DDL, _AGENT_RUNS_DDL, _AGENT_STEPS_DDL,
+                _STRATEGY_PROPOSALS_DDL):
         client.command(ddl.format(db=db))
 
     if legacy_tuned:

@@ -372,6 +372,22 @@ def system_health(client, db: str | None = None) -> dict:
     }
 
 
+# ---------- Proposals ----------
+
+_PROPOSAL_COLUMNS = ("proposal_id", "run_id", "kind", "symbol", "hypothesis",
+                     "proposed_change", "baseline", "evidence", "decision",
+                     "reason", "model", "created_at", "decided_at")
+
+
+def proposals(client, db: str | None = None, limit: int = 50) -> list[dict]:
+    rows = client.query(
+        f"SELECT {', '.join(_PROPOSAL_COLUMNS)} FROM {_db(db)}.strategy_proposals FINAL "
+        "ORDER BY created_at DESC LIMIT {n:UInt32}",
+        parameters={"n": limit},
+    ).result_rows
+    return [dict(zip(_PROPOSAL_COLUMNS, row)) for row in rows]
+
+
 # ---------- Signal evaluation ----------
 
 

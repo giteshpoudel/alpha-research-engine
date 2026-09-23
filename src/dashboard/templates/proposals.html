@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Proposals · Alpha Research{% endblock %}
+{% block content %}
+<h1>Optimizer Proposals</h1>
+<p class="muted">
+  Improvements proposed by the optimizer, each evaluated by the champion/challenger
+  gate on the same validation folds before adoption.
+</p>
+{% if not rows %}
+  <p class="muted">No proposals yet.</p>
+{% else %}
+<table>
+  <thead>
+    <tr><th>Created</th><th>Symbol</th><th>Kind</th><th>Decision</th>
+        <th>Hypothesis</th><th>Evidence</th></tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="muted">{{ row.created_at }}</td>
+      <td>{{ row.symbol }}</td>
+      <td>{{ row.kind }}</td>
+      <td>{% if row.decision == 'adopted' %}<span class="tag">adopted</span>
+          {% elif row.decision == 'rejected' %}<span class="tag prelim">rejected</span>
+          {% else %}{{ row.decision }}{% endif %}</td>
+      <td>{{ row.hypothesis }}</td>
+      <td class="mono">
+        {% if row.evidence %}
+          candidate {{ row.evidence.candidate_val }} vs incumbent {{ row.evidence.incumbent_val }}
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -206,6 +206,25 @@ def create_app() -> FastAPI:
              "coverage": coverage, "stats": stats, "has_data": bool(coverage or stats)},
         )
 
+    @app.get("/proposals", response_class=HTMLResponse)
+    def proposals_page(request: Request):
+        client, db = _conn()
+        rows = queries.proposals(client, db=db)
+        view = [{**r, "evidence": json.loads(r["evidence"]) if r["evidence"] else {}}
+                for r in rows]
+        return templates.TemplateResponse(
+            request, "proposals.html",
+            {"request": request, "active": "proposals", "rows": view},
+        )
+
+    @app.get("/api/proposals")
+    def api_proposals():
+        client, db = _conn()
+        return [
+            {k: (str(v) if hasattr(v, "isoformat") else v) for k, v in row.items()}
+            for row in queries.proposals(client, db=db)
+        ]
+
     @app.get("/api/health")
     def api_health():
         client, db = _conn()

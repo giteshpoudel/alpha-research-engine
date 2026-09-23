@@ -117,13 +117,13 @@ python -m src.research.signal_eval             # print + store to ClickHouse
 python -m src.research.signal_eval --no-store  # print only
 ```
 
-**Dashboard** (backtesting, paper-trading, and signal views; data-freshness strip + `/api/health`):
+**Dashboard** (backtesting, paper-trading, signal, and optimizer-proposals views; data-freshness strip + `/api/health`):
 
 ```bash
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (203 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (209 tests; integration tests need the Docker stack up).
 
 ## How it works
 
