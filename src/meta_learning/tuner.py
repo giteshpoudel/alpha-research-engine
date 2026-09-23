@@ -16,7 +16,7 @@ from src.backtesting.data import load_funding, load_ohlcv
 from src.backtesting.engine import run_funding_backtest, run_signal_backtest
 from src.backtesting.strategies import mean_reversion
 from src.ingestion.schemas import database_name, get_clickhouse_client
-from src.ingestion.tickers import TICKER_ALIASES
+from src.ingestion.universe import universe
 
 # funding_arb retired 2026-09: Phase 5 OOS comparison showed fee drag exceeds
 # carry at retail venues in every variant (tuned thresholds either sit out the
@@ -189,8 +189,8 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     strategies = TUNABLE_STRATEGIES if args.strategy == "all" else (args.strategy,)
-    symbols = tuple(TICKER_ALIASES) if args.symbols == "all" else tuple(args.symbols.split(","))
     ch_client = get_clickhouse_client()
+    symbols = universe(ch_client) if args.symbols == "all" else tuple(args.symbols.split(","))
     for strategy in strategies:
         for symbol in symbols:
             try:

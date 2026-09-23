@@ -17,7 +17,7 @@ import numpy as np
 
 from src.backtesting.data import load_ohlcv
 from src.ingestion.schemas import database_name
-from src.ingestion.tickers import TICKER_ALIASES
+from src.ingestion.universe import universe
 
 # Ordered (upper_bound, label); the last bucket is the fallback.
 PRICE_BUCKETS: tuple[tuple[float, str], ...] = ((2.0, "$0-2"), (20.0, "$2-20"))
@@ -74,7 +74,7 @@ def classify(symbol: str, price: float, ann_vol: float,
 def classify_universe(ch_client, symbols: tuple[str, ...] | None = None,
                       overrides: dict[str, str] | None = None) -> list[dict]:
     rows = []
-    for symbol in (symbols or tuple(TICKER_ALIASES)):
+    for symbol in (symbols or universe(ch_client)):
         try:
             close = load_ohlcv(ch_client, symbol)["close"]
         except ValueError:
@@ -108,10 +108,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--symbols", default="all")
     parser.add_argument("--no-store", action="store_true")
     args = parser.parse_args(argv)
-    symbols = tuple(TICKER_ALIASES) if args.symbols == "all" else tuple(args.symbols.split(","))
 
     from src.ingestion.schemas import get_clickhouse_client
     ch = get_clickhouse_client()
+    symbols = universe(ch) if args.symbols == "all" else tuple(args.symbols.split(","))
     rows = classify_universe(ch, symbols)
     if not args.no_store:
         store_metadata(ch, rows)

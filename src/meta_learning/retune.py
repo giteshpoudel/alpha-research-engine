@@ -15,7 +15,7 @@ import argparse
 from datetime import datetime, timedelta, timezone
 
 from src.ingestion.schemas import get_clickhouse_client
-from src.ingestion.tickers import TICKER_ALIASES
+from src.ingestion.universe import universe
 from src.meta_learning.params import get_tuned_params
 from src.meta_learning.tuner import (
     TUNABLE_STRATEGIES,
@@ -42,7 +42,7 @@ def retune_window(now: datetime, embargo_days: int = DEFAULT_EMBARGO_DAYS,
 def run_retune(ch_client, symbols: tuple[str, ...] | None = None,
                embargo_days: int = DEFAULT_EMBARGO_DAYS, months: int = DEFAULT_MONTHS,
                n_trials: int = 60) -> dict:
-    symbols = tuple(symbols) if symbols else tuple(TICKER_ALIASES)
+    symbols = tuple(symbols) if symbols else universe(ch_client)
     deploy, is_start, is_end = retune_window(datetime.now(timezone.utc), embargo_days, months)
     print(f"retune: deploy={deploy.isoformat()} train=[{is_start.isoformat()}, {is_end.isoformat()})")
     results: dict = {}

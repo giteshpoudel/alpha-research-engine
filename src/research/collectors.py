@@ -15,7 +15,7 @@ import pandas as pd
 from src.backtesting.data import load_ohlcv
 from src.backtesting.strategies.mean_reversion import MR_DEFAULTS
 from src.ingestion.schemas import database_name
-from src.ingestion.tickers import TICKER_ALIASES
+from src.ingestion.universe import universe
 from src.meta_learning.params import get_tuned_params
 
 _LOOKBACK_DAYS = 30
@@ -57,8 +57,9 @@ def _z_state(close: pd.Series, params: dict | None = None) -> tuple[str, float]:
 
 
 def collect_risk_data(ch_client) -> dict:
+    uni = universe(ch_client)
     returns = {}
-    for symbol in TICKER_ALIASES:
+    for symbol in uni:
         try:
             returns[symbol] = _returns_30d(ch_client, symbol)
         except ValueError:
@@ -83,7 +84,7 @@ def collect_risk_data(ch_client) -> dict:
     vols.sort(key=lambda v: -v["ann_vol"])
 
     signal_states = []
-    for symbol in TICKER_ALIASES:
+    for symbol in uni:
         try:
             start = datetime.now(timezone.utc) - timedelta(days=7)
             close = load_ohlcv(ch_client, symbol, start=start)["close"]
@@ -148,7 +149,7 @@ def collect_macro_data(ch_client) -> dict:
     ]
 
     price_changes = []
-    for symbol in TICKER_ALIASES:
+    for symbol in universe(ch_client):
         try:
             start = datetime.now(timezone.utc) - timedelta(days=2)
             close = load_ohlcv(ch_client, symbol, start=start)["close"]

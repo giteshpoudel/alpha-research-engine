@@ -59,3 +59,21 @@ def test_classify_universe_tool(ch_client):
 def test_system_health_tool(ch_client):
     result = tools.invoke("system_health", {}, ch=ch_client)
     assert result.ok and "ohlcv_latest" in result.data
+
+
+def test_universe_tools(ch_client):
+    from src.ingestion.schemas import database_name
+
+    added = tools.invoke("add_symbol",
+                         {"symbol": "TESTCOIN", "aliases": ["testcoin"], "backfill": False},
+                         ch=ch_client)
+    try:
+        assert added.ok and added.data["enabled"]
+        assert tools.invoke("list_universe", {}, ch=ch_client).ok
+        removed = tools.invoke("remove_symbol", {"symbol": "TESTCOIN"}, ch=ch_client)
+        assert removed.ok and removed.data["enabled"] is False
+    finally:
+        ch_client.command(
+            f"ALTER TABLE {database_name()}.universe DELETE WHERE symbol = 'TESTCOIN'",
+            settings={"mutations_sync": 1},
+        )

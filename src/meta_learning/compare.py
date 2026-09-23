@@ -23,7 +23,7 @@ from src.backtesting.engine import (
 from src.backtesting.runner import store_result
 from src.backtesting.strategies import mean_reversion
 from src.ingestion.schemas import get_clickhouse_client
-from src.ingestion.tickers import TICKER_ALIASES
+from src.ingestion.universe import universe
 from src.meta_learning.allocator import allocator_windows, pick_strategy
 from src.meta_learning.params import get_tuned_params
 
@@ -132,8 +132,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--fee", type=float, default=DEFAULT_FEE)
     args = parser.parse_args(argv)
 
-    symbols = tuple(TICKER_ALIASES) if args.symbols == "all" else tuple(args.symbols.split(","))
     ch_client = get_clickhouse_client()
+    symbols = universe(ch_client) if args.symbols == "all" else tuple(args.symbols.split(","))
     print(f"{'symbol':<8}{'variant':<12}{'total_return':>13}{'sharpe':>9}{'max_dd':>9}")
     for symbol in symbols:
         # funding_arb retired 2026-09 (see tuner.TUNABLE_STRATEGIES note)

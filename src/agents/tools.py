@@ -15,12 +15,14 @@ from typing import Any, Callable
 from pydantic import BaseModel, ValidationError
 
 from src.agents.state import (
+    AddSymbolArgs,
     BacktestArgs,
     ClassifyArgs,
     CompareArgs,
     EmptyArgs,
     FitArgs,
     SignalArgs,
+    SymbolArg,
     ToolResult,
     ValidateArgs,
 )
@@ -122,6 +124,25 @@ def _system_health(args: EmptyArgs, ch) -> dict:
 def _classify_universe(args: ClassifyArgs, ch) -> list[dict]:
     from src.agents.symbols import classify_universe
     return classify_universe(_client(ch), symbols=tuple(args.symbols) or None)
+
+
+@register("list_universe", "Tradable universe membership and aliases.", EmptyArgs)
+def _list_universe(args: EmptyArgs, ch) -> list[dict]:
+    from src.ingestion.universe import list_universe
+    return list_universe(_client(ch))
+
+
+@register("add_symbol", "Add a symbol to the universe and backfill its data.", AddSymbolArgs)
+def _add_symbol(args: AddSymbolArgs, ch) -> dict:
+    from src.ingestion.universe import add_symbol
+    return add_symbol(_client(ch), args.symbol, aliases=args.aliases or None,
+                      backfill=args.backfill)
+
+
+@register("remove_symbol", "Disable a symbol in the universe.", SymbolArg)
+def _remove_symbol(args: SymbolArg, ch) -> dict:
+    from src.ingestion.universe import remove_symbol
+    return remove_symbol(_client(ch), args.symbol)
 
 
 def invoke(name: str, args: dict | None = None, ch=None) -> ToolResult:

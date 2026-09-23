@@ -29,7 +29,7 @@ from src.backtesting.engine import (
 )
 from src.backtesting.strategies import mean_reversion, sentiment_momentum
 from src.ingestion.schemas import database_name, get_clickhouse_client
-from src.ingestion.tickers import TICKER_ALIASES
+from src.ingestion.universe import universe
 
 STRATEGIES = ("mean_reversion", "funding_arb", "sentiment_momentum")
 DEFAULT_FEE = 0.001
@@ -126,10 +126,10 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     strategies = STRATEGIES if args.strategy == "all" else (args.strategy,)
-    symbols = tuple(TICKER_ALIASES) if args.symbols == "all" else tuple(args.symbols.split(","))
     windows = ("IS", "OOS") if args.window == "ALL" else (args.window,)
 
     ch_client = get_clickhouse_client()
+    symbols = universe(ch_client) if args.symbols == "all" else tuple(args.symbols.split(","))
     for strategy in strategies:
         for symbol in symbols:
             for window in windows:

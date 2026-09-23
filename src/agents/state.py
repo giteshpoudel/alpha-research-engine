@@ -71,3 +71,13 @@ class ClassifyArgs(BaseModel):
 
 class EmptyArgs(BaseModel):
     pass
+
+
+class AddSymbolArgs(BaseModel):
+    symbol: str
+    aliases: list[str] = Field(default_factory=list)
+    backfill: bool = True
+
+
+class SymbolArg(BaseModel):
+    symbol: str

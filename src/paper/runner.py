@@ -23,7 +23,7 @@ from src.backtesting.data import WINDOWS, load_ohlcv
 from src.backtesting.runner import DEFAULT_FEE
 from src.backtesting.strategies import mean_reversion
 from src.ingestion.schemas import get_clickhouse_client
-from src.ingestion.tickers import TICKER_ALIASES
+from src.ingestion.universe import universe
 from src.meta_learning.params import get_tuned_param_history, get_tuned_params
 from src.paper import store
 from src.paper.executor import SleeveState, step
@@ -196,8 +196,8 @@ def main(argv: list[str] | None = None) -> None:
     if not args.once and not args.replay:
         args.once = True
 
-    symbols = tuple(TICKER_ALIASES) if args.symbols == "all" else tuple(args.symbols.split(","))
     client = get_clickhouse_client()
+    symbols = universe(client) if args.symbols == "all" else tuple(args.symbols.split(","))
 
     if args.replay:
         start = _parse_date(args.start)
