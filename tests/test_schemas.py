@@ -296,6 +296,23 @@ def test_paper_positions_table(ch_client):
     assert cols["updated_at"] == "DateTime64(3)"
 
 
+def test_agent_tables(ch_client):
+    runs = {r[0]: r[1] for r in
+            ch_client.query(f"DESCRIBE TABLE {database_name()}.agent_runs").result_rows}
+    assert runs["run_id"] == "String"
+    assert runs["status"] == "LowCardinality(String)"
+    assert runs["ended_at"] == "Nullable(DateTime64(3))"
+    assert runs["tokens_in"] == "UInt64"
+    assert runs["cost_usd"] == "Float64"
+
+    steps = {r[0]: r[1] for r in
+             ch_client.query(f"DESCRIBE TABLE {database_name()}.agent_steps").result_rows}
+    assert steps["step_idx"] == "UInt32"
+    assert steps["tool"] == "LowCardinality(String)"
+    assert steps["args_json"] == "String"
+    assert steps["created_at"] == "DateTime64(3)"
+
+
 def test_symbol_metadata_table(ch_client):
     rows = ch_client.query(f"DESCRIBE TABLE {database_name()}.symbol_metadata").result_rows
     cols = {r[0]: r[1] for r in rows}
