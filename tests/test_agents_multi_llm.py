@@ -19,6 +19,15 @@ def test_endpoint_order(monkeypatch):
     assert [e.name for e in multi_llm.endpoints("executor")] == ["deepseek", "moonshot", "ollama"]
 
 
+def test_provider_defaults_and_temperature(monkeypatch):
+    _set_keys(monkeypatch)
+    planner, executor = multi_llm.endpoints("planner")[0], multi_llm.endpoints("executor")[0]
+    assert planner.name == "moonshot" and planner.model == "kimi-k3"
+    assert planner.temperature == 1.0  # kimi-k3 requires 1.0
+    assert executor.name == "deepseek" and executor.model == "deepseek-chat"
+    assert executor.temperature == 0.3
+
+
 def test_endpoints_ollama_only_without_keys(monkeypatch):
     monkeypatch.delenv("MOONSHOT_API_KEY", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)

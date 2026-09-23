@@ -31,6 +31,7 @@ class LLMResult:
     tokens_out: int
     cost_usd: float
     degraded: bool
+    errors: list[str] | None = None  # provider failures encountered before success
 
 
 @dataclass
@@ -39,6 +40,7 @@ class _Endpoint:
     base_url: str
     api_key: str
     model: str
+    temperature: float | None = 0.3  # kimi-k3 requires 1.0; None omits the field
 
 
 class Cooldown:
@@ -71,8 +73,9 @@ def _moonshot() -> _Endpoint | None:
     key = os.environ.get("MOONSHOT_API_KEY")
     if not key:
         return None
+    # kimi-k3 rejects any temperature other than 1.0.
     return _Endpoint("moonshot", "https://api.moonshot.ai/v1", key,
-                     os.environ.get("KIMI_PLANNER_MODEL", "kimi-k3"))
+                     os.environ.get("KIMI_PLANNER_MODEL", "kimi-k3"), temperature=1.0)
 
 
 def _deepseek() -> _Endpoint | None:
@@ -96,12 +99,16 @@ def endpoints(role: str) -> list[_Endpoint]:
 
 
 def _call(ep: _Endpoint, system: str, user: str, http_client: httpx.Client) -> LLMResult:
+    payload: dict = {
+        "model": ep.model,
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+    }
+    if ep.temperature is not None:
+        payload["temperature"] = ep.temperature
     resp = post_with_backoff(
         f"{ep.base_url}/chat/completions",
-        json={"model": ep.model,
-              "messages": [{"role": "system", "content": system},
-                           {"role": "user", "content": user}],
-              "temperature": 0.3},
+        json=payload,
         client=http_client,
         headers={"Authorization": f"Bearer {ep.api_key}"},
         max_attempts=2,
@@ -126,7 +133,7 @@ def chat(role: str, system: str, user: str, http_client: httpx.Client | None = N
     cooldown = cooldown or _GLOBAL_COOLDOWN
     owns_client = http_client is None
     http_client = http_client or httpx.Client()
-    last_error: Exception | None = None
+    errors: list[str] = []
     try:
         for ep in candidates:
             if cooldown.should_skip(ep.name):
@@ -135,11 +142,12 @@ def chat(role: str, system: str, user: str, http_client: httpx.Client | None = N
                 result = _call(ep, system, user, http_client)
                 cooldown.record_success(ep.name)
                 result.degraded = ep.name != preferred
+                result.errors = errors or None
                 return result
             except Exception as exc:
                 cooldown.record_failure(ep.name)
-                last_error = exc
-        raise RuntimeError(f"all LLM providers failed for role '{role}': {last_error}")
+                errors.append(f"{ep.name}: {exc}")
+        raise RuntimeError(f"all LLM providers failed for role '{role}': {errors}")
     finally:
         if owns_client:
             http_client.close()

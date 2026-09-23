@@ -110,6 +110,13 @@ python -m src.ingestion.hackernews --start 2024-01-01   # fetch + store posts
 python -m src.ingestion.aggregator --bucket 1h --start 2024-01-01 --end 2026-09-19  # metrics
 ```
 
+**Autonomous optimizer** (planner kimi-k3 + executor DeepSeek; champion/challenger-gated):
+
+```bash
+python -m src.agents.optimizer --observe-only      # no LLM/cost
+python -m src.agents.optimizer --loops 2           # observe -> plan -> propose -> gate
+```
+
 **Signal evaluation** (does the social/news feed predict forward returns?):
 
 ```bash
@@ -123,7 +130,7 @@ python -m src.research.signal_eval --no-store  # print only
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (209 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (219 tests; integration tests need the Docker stack up).
 
 ## How it works
 
@@ -144,9 +151,10 @@ src/
   dashboard/    # FastAPI monitoring app (backtesting + paper trading)
   paper/        # paper-trading forward simulation (executor, store, runner)
   agents/       # autonomous optimizer: symbol classification, tool registry,
-                # run/step tracing + cost, multi-LLM clients (planner/executor)
+                # run/step tracing + cost, multi-LLM clients, proposals, daily-goal loop
 config/         # launchd plists: pipeline (5 min), backfill (daily), hackernews (daily),
-                # paper (hourly), retune (monthly), signal_eval + daily report (daily)
+                # paper (hourly), retune (monthly), signal_eval + report (daily),
+                # optimizer (daily)
 docs/           # blueprint + design specs + implementation plans
 tests/          # 141 tests: unit + integration against live services
 ```
