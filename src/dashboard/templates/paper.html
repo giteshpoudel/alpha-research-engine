@@ -38,7 +38,7 @@
       <td>{{ "%.3f"|format(row.trailing_return) }}</td>
       <td>{{ row.num_trades }}</td>
       <td>{{ "%.3f"|format(row.win_rate) }}</td>
-      <td class="muted">{{ row.last_bar_ts }}</td>
+      <td class="muted">{{ row.last_bar_ts | pacific }}</td>
     </tr>
     {% endfor %}
   </tbody>

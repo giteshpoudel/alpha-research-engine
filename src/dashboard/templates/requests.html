@@ -18,7 +18,7 @@
   <tbody>
     {% for row in rows %}
     <tr>
-      <td class="muted">{{ row.created_at }}</td>
+      <td class="muted">{{ row.created_at | pacific }}</td>
       <td>{{ row.kind }}</td>
       <td>{% if row.status == 'approved' %}<span class="tag">approved</span>
           {% elif row.status == 'rejected' %}<span class="tag prelim">rejected</span>

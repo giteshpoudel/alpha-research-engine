@@ -11,7 +11,7 @@
   <div class="card"><span>Trailing 30d</span><b>{{ "%.3f"|format(sleeve.trailing_return) }}</b></div>
   <div class="card"><span>Entry Price</span><b>{{ "%.4f"|format(sleeve.entry_price) }}</b></div>
   <div class="card"><span>Mark Price</span><b>{{ "%.4f"|format(sleeve.mark_price) }}</b></div>
-  <div class="card"><span>Last Bar</span><b class="mono">{{ sleeve.last_bar_ts }}</b></div>
+  <div class="card"><span>Last Bar</span><b class="mono">{{ sleeve.last_bar_ts | pacific }}</b></div>
 </div>
 <div class="chart-wrap"><canvas id="equity-chart"></canvas></div>
 <script>
@@ -48,7 +48,7 @@
     {% for t in trades %}
     <tr>
       <td>{{ t.side }}</td>
-      <td>{{ t.ts }}</td>
+      <td>{{ t.ts | pacific }}</td>
       <td>{{ "%.4f"|format(t.price) }}</td>
       <td>{{ "%.4f"|format(t.size) }}</td>
       <td>{{ "%.4f"|format(t.notional) }}</td>

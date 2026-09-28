@@ -17,7 +17,7 @@
   <tbody>
     {% for row in rows %}
     <tr>
-      <td class="muted">{{ row.created_at }}</td>
+      <td class="muted">{{ row.created_at | pacific }}</td>
       <td>{{ row.symbol }}</td>
       <td>{{ row.kind }}</td>
       <td>{% if row.decision == 'adopted' %}<span class="tag">adopted</span>

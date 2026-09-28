@@ -1,7 +1,9 @@
+from datetime import date, datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
-from src.dashboard.app import create_app
+from src.dashboard.app import _pacific, create_app
 
 
 @pytest.fixture(scope="module")
@@ -41,6 +43,15 @@ def test_run_page_renders_with_chart(client):
 def test_run_page_404(client):
     resp = client.get("/runs/nonexistent-run-id")
     assert resp.status_code == 404
+
+
+def test_pacific_filter():
+    # 18:00 UTC in September is 11:00 AM Pacific (PDT)
+    assert _pacific(datetime(2026, 9, 28, 18, 0, tzinfo=timezone.utc)) == "2026-09-28 11:00 AM PDT"
+    assert _pacific("2026-09-28 18:00:00") == "2026-09-28 11:00 AM PDT"
+    assert _pacific(date(2026, 9, 28)) == "2026-09-28"
+    assert _pacific(None) == "—"
+    assert _pacific("garbage") == "garbage"
 
 
 def test_optimizer_page_and_api(client):

@@ -22,8 +22,8 @@
         <td>{{ row.bucket_size }}</td>
         <td>{{ row.n }}</td>
         <td>{{ row.detail.tickers }}</td>
-        <td class="muted">{{ row.detail.start }}</td>
-        <td class="muted">{{ row.detail.end }}</td>
+        <td class="muted">{{ row.detail.start | pacific }}</td>
+        <td class="muted">{{ row.detail.end | pacific }}</td>
       </tr>
       {% endif %}
     {% endfor %}
@@ -38,7 +38,7 @@
       {% for s in row.detail.sources or [] %}
       <tr>
         <td>{{ s.source }}</td><td>{{ s.posts }}</td><td>{{ s.scored }}</td>
-        <td class="muted">{{ s.start }}</td><td class="muted">{{ s.end }}</td>
+        <td class="muted">{{ s.start | pacific }}</td><td class="muted">{{ s.end | pacific }}</td>
       </tr>
       {% endfor %}
     {% endfor %}

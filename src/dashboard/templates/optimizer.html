@@ -34,7 +34,7 @@
   <tbody>
     {% for c in changes %}
     <tr>
-      <td class="muted">{{ c.created_at }}</td>
+      <td class="muted">{{ c.created_at | pacific }}</td>
       <td>{{ c.event }}</td>
       <td>{{ c.subject }}</td>
       <td class="mono">{{ c.detail | tojson }}</td>
@@ -51,7 +51,7 @@
   <tbody>
     {% for r in runs %}
     <tr>
-      <td class="muted">{{ r.started_at }}</td>
+      <td class="muted">{{ r.started_at | pacific }}</td>
       <td>{{ r.status }}</td>
       <td>{{ r.loops }}</td>
       <td>{{ r.tokens_in }} / {{ r.tokens_out }}</td>

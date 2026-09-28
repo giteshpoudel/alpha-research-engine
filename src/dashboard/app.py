@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import clickhouse_connect
 from fastapi import FastAPI, Request
@@ -41,6 +43,29 @@ def _fmt_dict(row):
     return {k: (_fmt(v) if isinstance(v, float) else v) for k, v in row.items()}
 
 
+_PACIFIC = ZoneInfo("America/Los_Angeles")
+
+
+def _pacific(value):
+    """Render a timestamp in Pacific time as ``YYYY-MM-DD HH:MM AM/PM TZ``."""
+    if value is None or value in ("", "None"):
+        return "—"
+    dt = value
+    if isinstance(dt, str):
+        text = dt.strip()
+        try:
+            dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return text
+    if isinstance(dt, datetime):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(_PACIFIC).strftime("%Y-%m-%d %I:%M %p %Z")
+    if isinstance(dt, date):
+        return dt.strftime("%Y-%m-%d")
+    return str(value)
+
+
 def _jsonable(value):
     if isinstance(value, list):
         return [_jsonable(v) for v in value]
@@ -62,6 +87,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Alpha Research Dashboard")
     app.mount("/static", StaticFiles(directory=_PKG_DIR / "static"), name="static")
     templates = Jinja2Templates(directory=_PKG_DIR / "templates")
+    templates.env.filters["pacific"] = _pacific
 
     @app.exception_handler(Exception)
     async def on_error(request: Request, exc: Exception):

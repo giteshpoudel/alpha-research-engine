@@ -130,7 +130,7 @@ python -m src.research.signal_eval --no-store  # print only
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (248 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (249 tests; integration tests need the Docker stack up).
 
 ## How it works
 
