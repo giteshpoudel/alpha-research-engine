@@ -67,3 +67,51 @@ def test_non_params_marked_manual(ch):
     pid = proposals.create_proposal(ch, "add symbol X", {"symbol": "PEPE"}, kind="symbol")
     row = proposals.evaluate_proposal(ch, pid)
     assert row["decision"] == "manual"
+
+
+def _cleanup_id(ch, pid):
+    ch.command(
+        f"ALTER TABLE {database_name()}.strategy_proposals DELETE WHERE proposal_id = '{pid}'",
+        settings={"mutations_sync": 1})
+
+
+def test_evaluate_strategy_switch_adopts(ch, monkeypatch):
+    monkeypatch.setattr(proposals, "walk_forward_folds", lambda *a, **k: [1])
+    monkeypatch.setattr(
+        proposals, "validate_params",
+        lambda ch_, strat, sym, params, folds: 0.9 if strat == "momentum" else 0.1)
+    monkeypatch.setattr(proposals, "assigned_strategy", lambda *a, **k: "mean_reversion")
+    switched, published = [], []
+    monkeypatch.setattr(proposals, "set_assignment", lambda *a, **k: switched.append(a))
+    monkeypatch.setattr(proposals, "publish", lambda *a, **k: published.append(a))
+
+    pid = proposals.create_proposal(ch, "switch BTC to momentum",
+                                    {"strategy": "momentum", "symbol": "BTC", "params": {}},
+                                    kind="strategy", symbol="BTC")
+    try:
+        row = proposals.evaluate_proposal(ch, pid)
+        assert row["decision"] == "adopted"
+        assert switched and published
+    finally:
+        _cleanup_id(ch, pid)
+
+
+def test_evaluate_strategy_switch_rejects_worse(ch, monkeypatch):
+    monkeypatch.setattr(proposals, "walk_forward_folds", lambda *a, **k: [1])
+    monkeypatch.setattr(
+        proposals, "validate_params",
+        lambda ch_, strat, sym, params, folds: 0.1 if strat == "momentum" else 0.9)
+    monkeypatch.setattr(proposals, "assigned_strategy", lambda *a, **k: "mean_reversion")
+    switched = []
+    monkeypatch.setattr(proposals, "set_assignment", lambda *a, **k: switched.append(a))
+    monkeypatch.setattr(proposals, "publish", lambda *a, **k: None)
+
+    pid = proposals.create_proposal(ch, "switch BTC to momentum",
+                                    {"strategy": "momentum", "symbol": "BTC", "params": {}},
+                                    kind="strategy", symbol="BTC")
+    try:
+        row = proposals.evaluate_proposal(ch, pid)
+        assert row["decision"] == "rejected"
+        assert not switched
+    finally:
+        _cleanup_id(ch, pid)

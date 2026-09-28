@@ -57,3 +57,29 @@ def test_sentiment_momentum_exit_on_sentiment_flip():
     entries, exits = sentiment_momentum.signals(close, sent)
     assert entries.sum() == 1
     assert exits.iloc[30]  # exit exactly when sentiment flips below threshold
+
+
+def test_momentum_signals():
+    from src.backtesting.strategies import momentum
+
+    close = _series([1.0, 1.0, 1.0, 2.0])
+    entries, exits = momentum.signals(close, window=1, threshold=0.0)
+    assert entries.iloc[3]
+    assert not entries.iloc[:3].any()
+
+
+def test_breakout_signals():
+    from src.backtesting.strategies import breakout
+
+    close = _series([1.0, 2.0, 3.0, 1.0])
+    entries, exits = breakout.signals(close, entry_window=2, exit_window=2)
+    assert entries.iloc[2]   # 3 breaks the prior 2-bar high (2)
+    assert exits.iloc[3]     # 1 breaks the prior 2-bar low (2)
+
+
+def test_registry_names_and_defaults():
+    from src.backtesting.strategies import registry
+
+    assert set(registry.STRATEGY_NAMES) == {"mean_reversion", "momentum", "breakout"}
+    assert registry.defaults("momentum")["window"] == 24
+    assert set(registry.SEARCH_SPACES) == set(registry.STRATEGY_NAMES)

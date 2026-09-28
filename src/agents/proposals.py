@@ -14,7 +14,9 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
+from src.backtesting.strategies import registry
 from src.ingestion.schemas import database_name
+from src.meta_learning.assignments import assigned_strategy, set_assignment
 from src.meta_learning.params import get_tuned_params
 from src.meta_learning.tuner import (
     adopt_candidate,
@@ -26,12 +28,6 @@ from src.meta_learning.tuner import (
 _COLUMNS = ("proposal_id", "run_id", "kind", "symbol", "hypothesis",
             "proposed_change", "baseline", "evidence", "decision", "reason",
             "model", "created_at", "decided_at")
-
-
-class ParamsChange(BaseModel):
-    strategy: str = "mean_reversion"
-    symbol: str
-    params: dict
 
 
 class Proposal(BaseModel):
@@ -99,36 +95,63 @@ def _row_objects(row: dict) -> dict:
     }
 
 
+def _record(params: dict, validation: float | None, folds: int) -> dict:
+    return {"params": params, "train_sharpe": 0.0,
+            "validation_sharpe": validation, "folds": folds}
+
+
 def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
                       run_id: str = "") -> dict:
-    """Champion/challenger evaluation; updates and returns the proposal row."""
+    """Champion/challenger evaluation for params and strategy proposals."""
     row = get_proposal(ch, proposal_id)
     if row is None:
         raise ValueError(f"unknown proposal {proposal_id}")
-    if row["kind"] != "params":
+    change = json.loads(row["proposed_change"])
+    folds = walk_forward_folds()
+    baseline = None
+
+    if row["kind"] == "params":
+        strategy, symbol, params = change["strategy"], change["symbol"], change["params"]
+        candidate_val = validate_params(ch, strategy, symbol, params, folds)
+        baseline = get_tuned_params(ch, strategy, symbol)
+        incumbent_val = (validate_params(ch, strategy, symbol, baseline, folds)
+                         if baseline else None)
+        adopted = candidate_val is not None and adopt_candidate(candidate_val, incumbent_val)
+        if adopted and publish_adopted and candidate_val is not None:
+            publish(ch, strategy, symbol, _record(params, candidate_val, len(folds)),
+                    datetime.now(timezone.utc))
+        evidence = {"candidate_val": candidate_val, "incumbent_val": incumbent_val,
+                    "folds": len(folds)}
+        reason = f"candidate {candidate_val} vs incumbent {incumbent_val}"
+
+    elif row["kind"] == "strategy":
+        candidate, symbol = change["strategy"], change["symbol"]
+        candidate_params = change.get("params") or registry.defaults(candidate)
+        candidate_val = validate_params(ch, candidate, symbol, candidate_params, folds)
+        incumbent_strategy = assigned_strategy(ch, symbol)
+        incumbent_params = (get_tuned_params(ch, incumbent_strategy, symbol)
+                            or registry.defaults(incumbent_strategy))
+        incumbent_val = validate_params(ch, incumbent_strategy, symbol, incumbent_params, folds)
+        baseline = {"strategy": incumbent_strategy, "params": incumbent_params}
+        adopted = candidate == incumbent_strategy or (
+            candidate_val is not None and adopt_candidate(candidate_val, incumbent_val))
+        if adopted and publish_adopted and candidate_val is not None:
+            publish(ch, candidate, symbol, _record(candidate_params, candidate_val, len(folds)),
+                    datetime.now(timezone.utc))
+            set_assignment(ch, symbol, candidate)
+        evidence = {"candidate_strategy": candidate, "candidate_val": candidate_val,
+                    "incumbent_strategy": incumbent_strategy, "incumbent_val": incumbent_val,
+                    "folds": len(folds)}
+        reason = f"{candidate} {candidate_val} vs {incumbent_strategy} {incumbent_val}"
+
+    else:
         _write(ch, **{**_row_objects(row), "decision": "manual",
-                      "reason": "auto-evaluation only for params",
+                      "reason": "auto-evaluation only for params/strategy",
                       "decided_at": datetime.now(timezone.utc)})
         return get_proposal(ch, proposal_id)
 
-    change = ParamsChange(**json.loads(row["proposed_change"]))
-    folds = walk_forward_folds()
-    candidate_val = validate_params(ch, change.strategy, change.symbol, change.params, folds)
-    incumbent = get_tuned_params(ch, change.strategy, change.symbol)
-    incumbent_val = (validate_params(ch, change.strategy, change.symbol, incumbent, folds)
-                     if incumbent else None)
-    adopted = adopt_candidate(candidate_val, incumbent_val)
-    if adopted and publish_adopted and candidate_val is not None:
-        publish(ch, change.strategy, change.symbol,
-                {"params": change.params, "train_sharpe": 0.0,
-                 "validation_sharpe": candidate_val, "folds": len(folds)},
-                datetime.now(timezone.utc))
-
     _write(ch, **{**_row_objects(row), "run_id": run_id or row["run_id"],
-                  "baseline": incumbent,
-                  "evidence": {"candidate_val": candidate_val,
-                               "incumbent_val": incumbent_val, "folds": len(folds)},
+                  "baseline": baseline, "evidence": evidence,
                   "decision": "adopted" if adopted else "rejected",
-                  "reason": f"candidate {candidate_val} vs incumbent {incumbent_val}",
-                  "decided_at": datetime.now(timezone.utc)})
+                  "reason": reason, "decided_at": datetime.now(timezone.utc)})
     return get_proposal(ch, proposal_id)

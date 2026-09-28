@@ -14,15 +14,13 @@ import optuna
 
 from src.backtesting.data import load_funding, load_ohlcv
 from src.backtesting.engine import run_funding_backtest, run_signal_backtest
-from src.backtesting.strategies import mean_reversion
+from src.backtesting.strategies import registry
 from src.ingestion.schemas import database_name, get_clickhouse_client
 from src.ingestion.universe import universe
 
-# funding_arb retired 2026-09: Phase 5 OOS comparison showed fee drag exceeds
-# carry at retail venues in every variant (tuned thresholds either sit out the
-# market or lose heavily). Code and historical results remain; it is excluded
-# from future tuning runs.
-TUNABLE_STRATEGIES = ("mean_reversion",)
+# funding_arb retired 2026-09 (fee drag > carry); it stays in the engine but is
+# not a tunable signal strategy. All registry strategies are tuned.
+TUNABLE_STRATEGIES = registry.STRATEGY_NAMES
 DEFAULT_FEE = 0.001
 _TRAIN_MONTHS, _VAL_MONTHS, _STEP_MONTHS = 12, 3, 3
 _IS_START = datetime(2022, 1, 1, tzinfo=timezone.utc)
@@ -70,20 +68,14 @@ def _load_train_data(ch_client, strategy: str, symbol: str, start: datetime, end
 def _run(data, strategy: str, params: dict, fee: float):
     if strategy == "funding_arb":
         return run_funding_backtest(data, threshold=params["threshold"], fee=fee)
-    entries, exits = mean_reversion.signals(
-        data, window=params["window"], z_entry=params["z_entry"], z_exit=params["z_exit"]
-    )
+    entries, exits = registry.signals(strategy, data, params)
     return run_signal_backtest(data, entries, exits, fee=fee)
 
 
 def _suggest(trial, strategy: str) -> dict:
     if strategy == "funding_arb":
         return {"threshold": trial.suggest_float("threshold", 1e-5, 1e-3, log=True)}
-    return {
-        "window": trial.suggest_int("window", 12, 72),
-        "z_entry": trial.suggest_float("z_entry", -3.5, -1.0),
-        "z_exit": trial.suggest_float("z_exit", -0.5, 0.5),
-    }
+    return registry.SEARCH_SPACES[strategy](trial)
 
 
 def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,

@@ -296,6 +296,15 @@ def test_paper_positions_table(ch_client):
     assert cols["updated_at"] == "DateTime64(3)"
 
 
+def test_strategy_assignments_table(ch_client):
+    cols = {r[0]: r[1] for r in ch_client.query(
+        f"DESCRIBE TABLE {database_name()}.strategy_assignments").result_rows}
+    assert cols["symbol"] == "String"
+    assert cols["strategy"] == "LowCardinality(String)"
+    assert cols["valid_from"] == "DateTime64(3)"
+    assert cols["updated_at"] == "DateTime64(3)"
+
+
 def test_agent_requests_table(ch_client):
     cols = {r[0]: r[1] for r in
             ch_client.query(f"DESCRIBE TABLE {database_name()}.agent_requests").result_rows}

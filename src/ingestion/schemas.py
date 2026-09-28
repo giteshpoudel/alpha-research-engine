@@ -437,6 +437,20 @@ ORDER BY (request_id)
 """
 
 
+# Per-symbol strategy assignment: which strategy trades each symbol.
+_STRATEGY_ASSIGNMENTS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.strategy_assignments
+(
+    symbol String,
+    strategy LowCardinality(String),
+    valid_from DateTime64(3),
+    updated_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (symbol)
+"""
+
+
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
@@ -455,7 +469,7 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
                 _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL, _PAPER_CONTROLS_DDL,
                 _SIGNAL_EVAL_DDL, _SYMBOL_METADATA_DDL, _AGENT_RUNS_DDL, _AGENT_STEPS_DDL,
                 _STRATEGY_PROPOSALS_DDL, _AGENT_GOALS_DDL, _UNIVERSE_DDL,
-                _AGENT_REQUESTS_DDL):
+                _AGENT_REQUESTS_DDL, _STRATEGY_ASSIGNMENTS_DDL):
         client.command(ddl.format(db=db))
 
     if legacy_tuned:

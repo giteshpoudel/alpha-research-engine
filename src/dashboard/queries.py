@@ -201,6 +201,9 @@ def paper_summary(client, db: str | None = None,
             parameters=params,
         ).result_rows
     }
+    assignments = dict(client.query(
+        f"SELECT symbol, strategy FROM {dbn}.strategy_assignments FINAL"
+    ).result_rows)
 
     symbols: list[dict] = []
     for symbol, first_equity, last_equity, mark_price, status, last_bar_ts in equity_rows:
@@ -211,6 +214,7 @@ def paper_summary(client, db: str | None = None,
         last_equity = float(last_equity)
         symbols.append({
             "symbol": symbol,
+            "strategy": assignments.get(symbol, "mean_reversion"),
             "status": status,
             "entry_price": float(pos[2]) if pos else 0.0,
             "entry_ts": pos[3] if pos else None,
@@ -284,10 +288,16 @@ def paper_symbol(client, symbol: str, db: str | None = None,
         f"WHERE {clause} AND symbol = {{symbol:String}} LIMIT 1",
         parameters=params,
     ).result_rows
+    assignment = client.query(
+        f"SELECT strategy FROM {dbn}.strategy_assignments FINAL "
+        "WHERE symbol = {symbol:String}",
+        parameters=params,
+    ).result_rows
     first_equity = float(first_equity)
     last_equity = float(last_equity)
     return {
         "symbol": symbol,
+        "strategy": assignment[0][0] if assignment else "mean_reversion",
         "status": status,
         "entry_price": float(pos[0][0]) if pos else 0.0,
         "entry_ts": pos[0][1] if pos else None,

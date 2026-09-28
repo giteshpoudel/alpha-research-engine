@@ -21,24 +21,34 @@ import pandas as pd
 
 from src.backtesting.data import WINDOWS, load_ohlcv
 from src.backtesting.runner import DEFAULT_FEE
-from src.backtesting.strategies import mean_reversion
+from src.backtesting.strategies import registry
 from src.ingestion.schemas import get_clickhouse_client
 from src.ingestion.universe import universe
+from src.meta_learning.assignments import assigned_strategy
 from src.meta_learning.params import get_tuned_param_history, get_tuned_params
 from src.paper import store
 from src.paper.executor import SleeveState, step
 
-STRATEGY = "mean_reversion"
+STRATEGY = "assigned"  # resolve each symbol's strategy from its assignment
 INTERVAL = "1h"
 LOOKBACK_BARS = 200  # indicator warmup only; never used as trading history
 TRAILING_DAYS = 30
+
+
+def _strategy_for(client, requested: str, symbol: str) -> str:
+    return assigned_strategy(client, symbol) if requested == "assigned" else requested
+
+
+def _base_strategy(strategy: str) -> str:
+    """Strip a TEST_ prefix so isolation names still dispatch to a real strategy."""
+    return strategy.removeprefix("TEST_")
 
 
 def resolve_params(client, strategy: str, symbol: str,
                    as_of: datetime | None = None) -> dict:
     """Latest tuned params valid at ``as_of``, falling back to defaults."""
     tuned = get_tuned_params(client, strategy, symbol, as_of=as_of)
-    return dict(tuned) if tuned else dict(mean_reversion.MR_DEFAULTS)
+    return dict(tuned) if tuned else registry.defaults(_base_strategy(strategy))
 
 
 def _signal_series(client, strategy: str, symbol: str,
@@ -46,11 +56,14 @@ def _signal_series(client, strategy: str, symbol: str,
     """Entries/exits where each bar uses its own valid param version.
 
     Signals are computed once per param version over the full price series
-    (so rolling warmup is correct), then selected per bar by valid_from.
+    (so rolling warmup is correct), then selected per bar by valid_from. The
+    signal function is whatever strategy this symbol is assigned.
     """
+    base = _base_strategy(strategy)
+    signal_fn = registry.SIGNAL_FUNCS[base][0]
     history = get_tuned_param_history(client, strategy, symbol)
-    default_e, default_x = mean_reversion.signals(prices, **mean_reversion.MR_DEFAULTS)
-    computed = {vf: mean_reversion.signals(prices, **params) for vf, params in history}
+    default_e, default_x = signal_fn(prices, **registry.defaults(base))
+    computed = {vf: signal_fn(prices, **params) for vf, params in history}
     bounds = [vf for vf, _ in history]
     entries = pd.Series(False, index=prices.index, dtype=bool)
     exits = pd.Series(False, index=prices.index, dtype=bool)
@@ -204,8 +217,9 @@ def main(argv: list[str] | None = None) -> None:
         end = _parse_date(args.end) if args.end else None
         for symbol in symbols:
             try:
-                n = replay(client, args.strategy, symbol, start, end, fee=args.fee)
-                print(f"paper replay {symbol}: {n} bars")
+                strategy = _strategy_for(client, args.strategy, symbol)
+                n = replay(client, strategy, symbol, start, end, fee=args.fee)
+                print(f"paper replay {symbol} [{strategy}]: {n} bars")
             except Exception as exc:
                 print(f"paper replay {symbol}: FAILED: {exc}")
         return
@@ -214,8 +228,9 @@ def main(argv: list[str] | None = None) -> None:
         _topup(client, symbols)
     for symbol in symbols:
         try:
-            n = step_forward(client, args.strategy, symbol, fee=args.fee)
-            print(f"paper step {symbol}: {n} bars")
+            strategy = _strategy_for(client, args.strategy, symbol)
+            n = step_forward(client, strategy, symbol, fee=args.fee)
+            print(f"paper step {symbol} [{strategy}]: {n} bars")
         except Exception as exc:
             print(f"paper step {symbol}: FAILED: {exc}")
 

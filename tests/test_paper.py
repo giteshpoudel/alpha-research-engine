@@ -56,6 +56,24 @@ def test_step_forward_is_idempotent(ch_client):
     assert runner.step_forward(ch_client, STRATEGY, "ETH") == 0
 
 
+def test_strategy_for_uses_assignment(ch_client):
+    from src.meta_learning.assignments import ensure_assignments
+
+    ensure_assignments(ch_client)
+    assert runner._strategy_for(ch_client, "assigned", "BTC") in \
+        {"mean_reversion", "momentum", "breakout"}
+    assert runner._strategy_for(ch_client, "breakout", "BTC") == "breakout"
+
+
+def test_signal_series_dispatches_strategy(ch_client):
+    from src.backtesting.data import load_ohlcv
+
+    prices = load_ohlcv(ch_client, "BTC", interval="1h", start=START, end=END)["close"]
+    entries, exits = runner._signal_series(ch_client, "momentum", "BTC", prices)
+    assert len(entries) == len(prices)
+    assert entries.dtype == bool and exits.dtype == bool
+
+
 def test_resolve_params_falls_back_to_defaults(ch_client):
     assert runner.resolve_params(ch_client, STRATEGY, "LTC") == dict(mean_reversion.MR_DEFAULTS)
 

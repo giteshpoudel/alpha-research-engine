@@ -29,16 +29,19 @@ _PLANNER_SYSTEM = (
     "parameters per symbol. The harness enforces out-of-sample discipline for you.\n"
     "Respond with STRICT JSON only, no prose. Choose ONE action:\n"
     '1) parameter change: {"action":"propose_params","symbol":"<TICKER>",'
-    '"params":{"window":<int>,"z_entry":<float>,"z_exit":<float>},'
+    '"params":{...},"hypothesis":"<one sentence>","analysis":"<one or two sentences>"}\n'
+    '   (mean_reversion params: window 12-72, z_entry -3.5..-1.0, z_exit -0.5..0.5)\n'
+    '2) switch a symbol to a different strategy: {"action":"switch_strategy",'
+    '"symbol":"<TICKER>","strategy":"mean_reversion"|"momentum"|"breakout",'
     '"hypothesis":"<one sentence>","analysis":"<one or two sentences>"}\n'
-    '2) ask the human for data/API or a major change: {"action":"request",'
+    '3) ask the human for data/API or a major change: {"action":"request",'
     '"kind":"data"|"api"|"change","title":"<short>",'
     '"justification":"<why it should improve profit>","expected_impact":"<estimate>"}\n'
-    '3) do nothing: {"action":"none"}\n'
-    "Prefer propose_params when the evidence supports a parameter change. Use "
-    "request ONLY when new data/APIs or a guardrail/major change is the real "
-    "blocker, and justify the expected profit impact. "
-    "Keep params within window 12-72, z_entry -3.5..-1.0, z_exit -0.5..0.5."
+    '4) do nothing: {"action":"none"}\n'
+    "Match strategy style to the symbol: momentum/breakout for trending majors, "
+    "mean_reversion for choppy/penny/meme names. Prefer propose_params for small "
+    "tweaks; use switch_strategy when a different approach fits better. Use request "
+    "ONLY when new data/APIs or a major change is the real blocker."
 )
 
 _EXECUTOR_SYSTEM = (
@@ -76,10 +79,15 @@ def validate_params(params) -> bool:
 
 
 def _observe(ch) -> dict:
+    from src.backtesting.strategies.registry import STRATEGY_NAMES
+    from src.meta_learning.assignments import list_assignments
+
     return {
         "paper": tools.invoke("paper_summary", {}, ch=ch).data,
         "health": tools.invoke("system_health", {}, ch=ch).data,
         "symbols": tools.invoke("classify_universe", {}, ch=ch).data,
+        "strategies": list(STRATEGY_NAMES),
+        "assignments": list_assignments(ch),
     }
 
 
@@ -112,6 +120,25 @@ def _execute_plan(plan: dict | None, ch, run, strategy: str, publish_adopted: bo
         run.step("request", {"request_id": request_id, "title": plan.get("title", "")},
                  {"action": "request"})
         return {"action": "request", "request_id": request_id}
+    if plan.get("action") == "switch_strategy":
+        from src.backtesting.strategies.registry import STRATEGY_NAMES
+        symbol, strategy = plan.get("symbol"), plan.get("strategy")
+        if symbol and strategy in STRATEGY_NAMES:
+            change = {"strategy": strategy, "symbol": symbol,
+                      "params": plan.get("params") or {}}
+            proposal_id = proposals.create_proposal(
+                ch, plan.get("hypothesis") or plan.get("analysis", ""), change,
+                kind="strategy", symbol=symbol, model=plan.get("model", ""),
+                run_id=run.run_id)
+            row = proposals.evaluate_proposal(ch, proposal_id,
+                                              publish_adopted=publish_adopted,
+                                              run_id=run.run_id)
+            run.step("proposal", {"proposal_id": proposal_id, "change": change},
+                     {"decision": row["decision"], "evidence": row["evidence"]})
+            return {"action": "proposal", "kind": "strategy",
+                    "proposal_id": proposal_id, "decision": row["decision"]}
+        run.step("no_action", {"plan": plan}, {"action": "none"})
+        return {"action": "none"}
     if plan.get("action") != "propose_params" or not validate_params(plan.get("params")):
         run.step("no_action", {"plan": plan}, {"action": "none"})
         return {"action": "none"}

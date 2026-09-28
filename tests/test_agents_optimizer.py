@@ -6,7 +6,7 @@ from src.agents import optimizer
 from src.ingestion.schemas import database_name, get_clickhouse_client
 
 DAY = date(2020, 2, 1)
-STRATEGY = "TEST_opt"
+STRATEGY = "TEST_mean_reversion"
 PROPOSAL = ('{"action":"propose_params","symbol":"BTC",'
             '"params":{"window":24,"z_entry":-2.0,"z_exit":0.0},'
             '"hypothesis":"h","analysis":"a"}')
@@ -41,9 +41,9 @@ def ch():
     c = get_clickhouse_client()
     yield c
     c.command(f"ALTER TABLE {database_name()}.strategy_proposals DELETE "
-              "WHERE proposed_change LIKE '%TEST_opt%'", settings={"mutations_sync": 1})
+              "WHERE proposed_change LIKE '%TEST_mean_reversion%'", settings={"mutations_sync": 1})
     c.command(f"ALTER TABLE {database_name()}.tuned_params DELETE "
-              "WHERE strategy = 'TEST_opt'", settings={"mutations_sync": 1})
+              "WHERE strategy = 'TEST_mean_reversion'", settings={"mutations_sync": 1})
     c.command(f"ALTER TABLE {database_name()}.agent_goals DELETE WHERE goal_date = {{d:Date}}",
               parameters={"d": DAY}, settings={"mutations_sync": 1})
 
@@ -91,6 +91,27 @@ def test_run_optimizer_request_action(ch):
         _cleanup_run(ch, result["run_id"])
         ch.command(f"ALTER TABLE {database_name()}.agent_requests DELETE "
                    "WHERE title LIKE 'TESTREQ%'", settings={"mutations_sync": 1})
+
+
+SWITCH = ('{"action":"switch_strategy","symbol":"ZZZTESTSYM","strategy":"momentum",'
+          '"hypothesis":"h","analysis":"a"}')
+
+
+def test_run_optimizer_switch_strategy(ch):
+    def stub(role, system, user):
+        return _Res(SWITCH)
+
+    result = optimizer.run_optimizer(ch=ch, loops=1, strategy=STRATEGY,
+                                     chat_fn=stub, day=DAY)
+    try:
+        assert result["proposals"] and result["proposals"][0].get("kind") == "strategy"
+        assert result["proposals"][0]["decision"] in {"adopted", "rejected"}
+    finally:
+        _cleanup_run(ch, result["run_id"])
+        ch.command(f"ALTER TABLE {database_name()}.strategy_proposals DELETE "
+                   "WHERE symbol = 'ZZZTESTSYM'", settings={"mutations_sync": 1})
+        ch.command(f"ALTER TABLE {database_name()}.strategy_assignments DELETE "
+                   "WHERE symbol = 'ZZZTESTSYM'", settings={"mutations_sync": 1})
 
 
 def test_run_optimizer_no_action(ch):
