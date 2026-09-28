@@ -124,13 +124,13 @@ python -m src.research.signal_eval             # print + store to ClickHouse
 python -m src.research.signal_eval --no-store  # print only
 ```
 
-**Dashboard** (backtesting, paper-trading, signal, optimizer-proposals and requests views; data-freshness strip + `/api/health`):
+**Dashboard** (always-on; backtesting, paper-trading, signal, optimizer, proposals and requests views; data-freshness strip + `/api/health`):
 
 ```bash
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (245 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (248 tests; integration tests need the Docker stack up).
 
 ## How it works
 
@@ -152,9 +152,9 @@ src/
   paper/        # paper-trading forward simulation (executor, store, runner)
   agents/       # autonomous optimizer: symbol classification + dynamic universe,
                 # tool registry, tracing + cost, multi-LLM clients, proposals, daily-goal loop
-config/         # launchd plists: stack (login + 30 min), pipeline (5 min), backfill (daily),
-                # hackernews (daily), paper (hourly), retune (monthly),
-                # signal_eval + report (daily), optimizer (daily)
+config/         # launchd plists: stack (login + 30 min), dashboard (always-on),
+                # pipeline (5 min), backfill (daily), hackernews (daily), paper (hourly),
+                # retune (monthly), signal_eval + report (daily), optimizer (daily)
 docs/           # blueprint + design specs + implementation plans
 tests/          # 141 tests: unit + integration against live services
 ```

@@ -16,6 +16,7 @@ import argparse
 import uuid
 from datetime import datetime, timezone
 
+from src.agents.change_log import log as log_change
 from src.ingestion.schemas import database_name, get_clickhouse_client
 
 _COLUMNS = ("request_id", "run_id", "kind", "title", "justification",
@@ -41,6 +42,8 @@ def create_request(ch, title: str, justification: str, kind: str = "data",
            justification=justification, expected_impact=expected_impact,
            status="open", model=model, created_at=datetime.now(timezone.utc),
            decided_at=None, decision_note="")
+    log_change(ch, "request_created", subject=kind,
+               detail={"title": title, "expected_impact": expected_impact}, run_id=run_id)
     return request_id
 
 

@@ -398,6 +398,59 @@ def proposals(client, db: str | None = None, limit: int = 50) -> list[dict]:
     return [dict(zip(_PROPOSAL_COLUMNS, row)) for row in rows]
 
 
+# ---------- Optimizer overview ----------
+
+_GOAL_COLUMNS = ("goal_date", "target_profit_pct", "achieved_profit_pct",
+                 "status", "updated_at")
+_CHANGE_COLUMNS = ("event", "subject", "detail", "run_id", "created_at")
+_RUN_COLUMNS = ("run_id", "kind", "status", "loops", "tokens_in", "tokens_out",
+                "cost_usd", "started_at", "ended_at", "summary")
+
+
+def optimizer_overview(client, db: str | None = None, limit: int = 20) -> dict:
+    dbn = _db(db)
+
+    goal_rows = client.query(
+        f"SELECT {', '.join(_GOAL_COLUMNS)} FROM {dbn}.agent_goals FINAL "
+        "ORDER BY goal_date DESC LIMIT 1"
+    ).result_rows
+    goal = dict(zip(_GOAL_COLUMNS, goal_rows[0])) if goal_rows else None
+
+    meta = {r[0]: (r[1], r[2], r[3]) for r in client.query(
+        f"SELECT symbol, category, price_bucket, pump_risk "
+        f"FROM {dbn}.symbol_metadata FINAL").result_rows}
+    assignments = []
+    for symbol, strategy in client.query(
+            f"SELECT symbol, strategy FROM {dbn}.strategy_assignments FINAL ORDER BY symbol"
+    ).result_rows:
+        category, bucket, risk = meta.get(symbol, ("", "", ""))
+        assignments.append({"symbol": symbol, "strategy": strategy,
+                            "category": category, "price_bucket": bucket,
+                            "pump_risk": risk})
+
+    changes = [dict(zip(_CHANGE_COLUMNS, r)) for r in client.query(
+        f"SELECT {', '.join(_CHANGE_COLUMNS)} FROM {dbn}.change_log "
+        "ORDER BY created_at DESC LIMIT {n:UInt32}", parameters={"n": limit}).result_rows]
+
+    runs = [dict(zip(_RUN_COLUMNS, r)) for r in client.query(
+        f"SELECT {', '.join(_RUN_COLUMNS)} FROM {dbn}.agent_runs FINAL "
+        "ORDER BY started_at DESC LIMIT {n:UInt32}", parameters={"n": 10}).result_rows]
+
+    req_cols = ("request_id", "kind", "title", "justification", "expected_impact",
+                "status", "created_at")
+    requests_ = [dict(zip(req_cols, r)) for r in client.query(
+        f"SELECT {', '.join(req_cols)} FROM {dbn}.agent_requests FINAL "
+        "ORDER BY created_at DESC LIMIT {n:UInt32}", parameters={"n": 10}).result_rows]
+
+    prop_cols = ("proposal_id", "kind", "symbol", "decision", "reason", "created_at")
+    proposals_ = [dict(zip(prop_cols, r)) for r in client.query(
+        f"SELECT {', '.join(prop_cols)} FROM {dbn}.strategy_proposals FINAL "
+        "ORDER BY created_at DESC LIMIT {n:UInt32}", parameters={"n": 10}).result_rows]
+
+    return {"goal": goal, "assignments": assignments, "changes": changes,
+            "runs": runs, "requests": requests_, "proposals": proposals_}
+
+
 # ---------- Optimizer requests ----------
 
 _REQUEST_COLUMNS = ("request_id", "run_id", "kind", "title", "justification",

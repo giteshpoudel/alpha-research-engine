@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
+from src.agents.change_log import log as log_change
 from src.backtesting.strategies import registry
 from src.ingestion.schemas import database_name
 from src.meta_learning.assignments import assigned_strategy, set_assignment
@@ -154,4 +155,11 @@ def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
                   "baseline": baseline, "evidence": evidence,
                   "decision": "adopted" if adopted else "rejected",
                   "reason": reason, "decided_at": datetime.now(timezone.utc)})
+    if adopted:
+        subject = row["symbol"] or change.get("symbol", "")
+        event = "strategy_switch" if row["kind"] == "strategy" else "params_adopted"
+        log_change(ch, event, subject=subject,
+                   detail={"kind": row["kind"], "change": change,
+                           "evidence": evidence, "reason": reason},
+                   run_id=run_id or row["run_id"])
     return get_proposal(ch, proposal_id)

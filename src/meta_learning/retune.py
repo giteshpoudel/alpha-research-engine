@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timedelta, timezone
 
+from src.agents.change_log import log as log_change
 from src.ingestion.schemas import get_clickhouse_client
 from src.ingestion.universe import universe
 from src.meta_learning.params import get_tuned_params
@@ -61,6 +62,10 @@ def run_retune(ch_client, symbols: tuple[str, ...] | None = None,
                 if adopt_candidate(candidate_val, incumbent_val):
                     publish(ch_client, strategy, symbol, candidate, deploy)
                     verdict = "ADOPTED"
+                    log_change(ch_client, "params_adopted", subject=symbol,
+                               detail={"strategy": strategy, "params": candidate["params"],
+                                       "candidate_val": candidate_val,
+                                       "incumbent_val": incumbent_val})
                 else:
                     verdict = "rejected"
                 results[f"{strategy} {symbol}"] = {

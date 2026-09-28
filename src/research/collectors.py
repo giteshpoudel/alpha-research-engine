@@ -243,6 +243,35 @@ def collect_portfolio_data(ch_client) -> dict:
     }
 
 
+def collect_optimizer_data(ch_client) -> dict:
+    """Optimizer state for the report: daily goal, assignments, recent changes."""
+    db = database_name()
+    goal_rows = ch_client.query(
+        f"SELECT goal_date, target_profit_pct, achieved_profit_pct, status "
+        f"FROM {db}.agent_goals FINAL ORDER BY goal_date DESC LIMIT 1"
+    ).result_rows
+    goal = None
+    if goal_rows:
+        goal = dict(zip(("goal_date", "target_profit_pct", "achieved_profit_pct",
+                         "status"), goal_rows[0]))
+    meta = {r[0]: r[1] for r in ch_client.query(
+        f"SELECT symbol, category FROM {db}.symbol_metadata FINAL").result_rows}
+    assignments = [
+        {"symbol": s, "strategy": st, "category": meta.get(s, "")}
+        for s, st in ch_client.query(
+            f"SELECT symbol, strategy FROM {db}.strategy_assignments FINAL ORDER BY symbol"
+        ).result_rows
+    ]
+    changes = [
+        {"event": e, "subject": sub, "created_at": str(ts)}
+        for e, sub, ts in ch_client.query(
+            f"SELECT event, subject, created_at FROM {db}.change_log "
+            "WHERE created_at >= now64(3) - INTERVAL 1 DAY ORDER BY created_at DESC LIMIT 20"
+        ).result_rows
+    ]
+    return {"goal": goal, "assignments": assignments, "changes": changes}
+
+
 def collect_requests(ch_client) -> dict:
     """Open optimizer requests to the human."""
     rows = ch_client.query(

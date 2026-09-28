@@ -41,6 +41,14 @@ def _fmt_dict(row):
     return {k: (_fmt(v) if isinstance(v, float) else v) for k, v in row.items()}
 
 
+def _jsonable(value):
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    return str(value) if hasattr(value, "isoformat") else value
+
+
 def _signal_view(rows):
     """Split stored evaluation rows into coverage and statistics, parsing detail JSON."""
     coverage, stats = [], []
@@ -224,6 +232,20 @@ def create_app() -> FastAPI:
             {k: (str(v) if hasattr(v, "isoformat") else v) for k, v in row.items()}
             for row in queries.proposals(client, db=db)
         ]
+
+    @app.get("/optimizer", response_class=HTMLResponse)
+    def optimizer_page(request: Request):
+        client, db = _conn()
+        data = queries.optimizer_overview(client, db=db)
+        data["changes"] = [{**c, "detail": json.loads(c["detail"]) if c["detail"] else {}}
+                           for c in data["changes"]]
+        return templates.TemplateResponse(
+            request, "optimizer.html", {"request": request, "active": "optimizer", **data})
+
+    @app.get("/api/optimizer")
+    def api_optimizer():
+        client, db = _conn()
+        return _jsonable(queries.optimizer_overview(client, db=db))
 
     @app.get("/requests", response_class=HTMLResponse)
     def requests_page(request: Request):

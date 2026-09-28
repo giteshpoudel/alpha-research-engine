@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
+from src.agents.change_log import log as log_change
 from src.ingestion.schemas import database_name
 
 DEFAULT_DAILY_GOAL_PCT = 0.10  # percent per day
@@ -49,13 +50,19 @@ def update_goal(ch, day: date, achieved_pct: float, status: str | None = None) -
     row = ensure_goal(ch, day)
     status = status or ("met" if achieved_pct >= float(row["target_profit_pct"]) else "pending")
     _write(ch, day, float(row["target_profit_pct"]), achieved_pct, status)
+    if status == "met" and row["status"] != "met":
+        log_change(ch, "goal_met", subject=str(day),
+                   detail={"target": float(row["target_profit_pct"]),
+                           "achieved": achieved_pct})
     return get_goal(ch, day)
 
 
 def raise_goal(ch, day: date, factor: float = 1.1) -> dict:
     row = ensure_goal(ch, day)
-    _write(ch, day, float(row["target_profit_pct"]) * factor,
-           float(row["achieved_profit_pct"]), "raised")
+    new_target = float(row["target_profit_pct"]) * factor
+    _write(ch, day, new_target, float(row["achieved_profit_pct"]), "raised")
+    log_change(ch, "goal_raised", subject=str(day),
+               detail={"from": float(row["target_profit_pct"]), "to": new_target})
     return get_goal(ch, day)
 
 

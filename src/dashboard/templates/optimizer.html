@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Optimizer · Alpha Research{% endblock %}
+{% block content %}
+<h1>Optimizer</h1>
+
+{% if goal %}
+<div class="cards">
+  <div class="card"><span>Goal Date</span><b>{{ goal.goal_date }}</b></div>
+  <div class="card"><span>Target</span><b>{{ "%.3f"|format(goal.target_profit_pct) }}%</b></div>
+  <div class="card"><span>Achieved</span><b>{{ "%.3f"|format(goal.achieved_profit_pct) }}%</b></div>
+  <div class="card"><span>Status</span><b>{{ goal.status }}</b></div>
+</div>
+{% else %}
+<p class="muted">No goal recorded yet.</p>
+{% endif %}
+
+<h2>Current assignments</h2>
+<table>
+  <thead><tr><th>Symbol</th><th>Strategy</th><th>Category</th><th>Price</th><th>Risk</th></tr></thead>
+  <tbody>
+    {% for a in assignments %}
+    <tr>
+      <td>{{ a.symbol }}</td><td>{{ a.strategy }}</td>
+      <td>{{ a.category }}</td><td>{{ a.price_bucket }}</td><td>{{ a.pump_risk }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Recent changes</h2>
+{% if changes %}
+<table>
+  <thead><tr><th>When</th><th>Event</th><th>Subject</th><th>Detail</th></tr></thead>
+  <tbody>
+    {% for c in changes %}
+    <tr>
+      <td class="muted">{{ c.created_at }}</td>
+      <td>{{ c.event }}</td>
+      <td>{{ c.subject }}</td>
+      <td class="mono">{{ c.detail | tojson }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="muted">No changes recorded yet.</p>{% endif %}
+
+<h2>Recent runs</h2>
+{% if runs %}
+<table>
+  <thead><tr><th>Started</th><th>Status</th><th>Loops</th><th>Tokens in/out</th><th>Summary</th></tr></thead>
+  <tbody>
+    {% for r in runs %}
+    <tr>
+      <td class="muted">{{ r.started_at }}</td>
+      <td>{{ r.status }}</td>
+      <td>{{ r.loops }}</td>
+      <td>{{ r.tokens_in }} / {{ r.tokens_out }}</td>
+      <td class="muted">{{ r.summary }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="muted">No runs yet.</p>{% endif %}
+
+<h2>Open requests</h2>
+{% set open = requests | selectattr('status', 'equalto', 'open') | list %}
+{% if open %}
+<table>
+  <thead><tr><th>Kind</th><th>Title</th><th>Justification</th><th>Expected</th></tr></thead>
+  <tbody>
+    {% for q in open %}
+    <tr><td>{{ q.kind }}</td><td>{{ q.title }}</td>
+        <td>{{ q.justification }}</td><td class="muted">{{ q.expected_impact }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="muted">No open requests.</p>{% endif %}
+{% endblock %}

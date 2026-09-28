@@ -43,6 +43,14 @@ def test_run_page_404(client):
     assert resp.status_code == 404
 
 
+def test_optimizer_page_and_api(client):
+    resp = client.get("/optimizer")
+    assert resp.status_code == 200
+    assert 'href="/optimizer"' in resp.text  # nav link enabled
+    api = client.get("/api/optimizer").json()
+    assert {"goal", "assignments", "changes", "runs"} <= set(api)
+
+
 def test_requests_page_and_api(client):
     resp = client.get("/requests")
     assert resp.status_code == 200

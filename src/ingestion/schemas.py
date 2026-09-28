@@ -451,6 +451,22 @@ ORDER BY (symbol)
 """
 
 
+# Append-only audit trail of optimizer-driven changes (no dedup — history).
+_CHANGE_LOG_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.change_log
+(
+    log_id String,
+    event LowCardinality(String),
+    subject String,
+    detail String,
+    run_id String,
+    created_at DateTime64(3)
+)
+ENGINE = MergeTree
+ORDER BY (created_at, log_id)
+"""
+
+
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
@@ -469,7 +485,7 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
                 _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL, _PAPER_CONTROLS_DDL,
                 _SIGNAL_EVAL_DDL, _SYMBOL_METADATA_DDL, _AGENT_RUNS_DDL, _AGENT_STEPS_DDL,
                 _STRATEGY_PROPOSALS_DDL, _AGENT_GOALS_DDL, _UNIVERSE_DDL,
-                _AGENT_REQUESTS_DDL, _STRATEGY_ASSIGNMENTS_DDL):
+                _AGENT_REQUESTS_DDL, _STRATEGY_ASSIGNMENTS_DDL, _CHANGE_LOG_DDL):
         client.command(ddl.format(db=db))
 
     if legacy_tuned:

@@ -22,6 +22,7 @@ class ReportState(TypedDict, total=False):
     portfolio_data: dict
     signal_data: dict
     requests_data: dict
+    optimizer_data: dict
     risk_section: str
     macro_section: str
     report_md: str
@@ -75,6 +76,26 @@ def _portfolio_md(portfolio: dict) -> str:
     return "\n".join(lines)
 
 
+def _optimizer_md(data: dict) -> str:
+    lines = ["## Optimizer", ""]
+    goal = data.get("goal")
+    if goal:
+        lines.append(f"Daily goal {goal['goal_date']}: target "
+                     f"{goal['target_profit_pct']:.3f}% — achieved "
+                     f"{goal['achieved_profit_pct']:.3f}% ({goal['status']}).")
+    else:
+        lines.append("No goal recorded.")
+    changes = data.get("changes") or []
+    if changes:
+        lines.append("")
+        lines.append("Changes (last 24h):")
+        for change in changes:
+            lines.append(f"- {change['event']}: {change['subject']}")
+    else:
+        lines.append("No changes in the last 24h.")
+    return "\n".join(lines)
+
+
 def _requests_md(requests_data: dict) -> str:
     lines = ["## Optimizer Requests", ""]
     rows = requests_data.get("open") or []
@@ -120,6 +141,8 @@ def _data_summary(state: ReportState) -> str:
     lines.append("")
     lines.append(_requests_md(state.get("requests_data", {})))
     lines.append("")
+    lines.append(_optimizer_md(state.get("optimizer_data", {})))
+    lines.append("")
     lines.append("Portfolio figures are strategy-implied (research/backtest "
                  "scope), not real holdings. Not financial advice.")
     return "\n".join(lines)
@@ -139,6 +162,7 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
         "portfolio_data": collectors.collect_portfolio_data(ch_client),
         "signal_data": collectors.collect_signal_data(ch_client),
         "requests_data": collectors.collect_requests(ch_client),
+        "optimizer_data": collectors.collect_optimizer_data(ch_client),
     }
     # Identity check: tests inject a stub chat_fn; production uses llm.chat.
     model = "mock" if chat_fn is not chat else active_model()
@@ -155,7 +179,8 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
                         ("macro_data", collectors.collect_macro_data),
                         ("portfolio_data", collectors.collect_portfolio_data),
                         ("signal_data", collectors.collect_signal_data),
-                        ("requests_data", collectors.collect_requests)):
+                        ("requests_data", collectors.collect_requests),
+                        ("optimizer_data", collectors.collect_optimizer_data)):
             if key not in state:
                 state[key] = fn(ch_client)
         risk_section = _data_summary(state)
@@ -167,7 +192,8 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
     portfolio_section = _portfolio_md(state.get("portfolio_data", {}))
     signal_section = _signal_md(state.get("signal_data", {}))
     requests_section = _requests_md(state.get("requests_data", {}))
-    for section in (portfolio_section, signal_section, requests_section):
+    optimizer_section = _optimizer_md(state.get("optimizer_data", {}))
+    for section in (portfolio_section, signal_section, requests_section, optimizer_section):
         heading = section.splitlines()[0]
         if heading and heading not in report_md:
             report_md += "\n\n" + section
@@ -184,6 +210,7 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
         [report_date, "portfolio", portfolio_section, model, now],
         [report_date, "signal", signal_section, model, now],
         [report_date, "requests", requests_section, model, now],
+        [report_date, "optimizer", optimizer_section, model, now],
         [report_date, "report", report_md, model, now],
     ]
     ch_client.insert(

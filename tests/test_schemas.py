@@ -296,6 +296,20 @@ def test_paper_positions_table(ch_client):
     assert cols["updated_at"] == "DateTime64(3)"
 
 
+def test_change_log_table(ch_client):
+    cols = {r[0]: r[1] for r in
+            ch_client.query(f"DESCRIBE TABLE {database_name()}.change_log").result_rows}
+    assert cols["log_id"] == "String"
+    assert cols["event"] == "LowCardinality(String)"
+    assert cols["detail"] == "String"
+    assert cols["created_at"] == "DateTime64(3)"
+    engine = ch_client.query(
+        "SELECT engine FROM system.tables WHERE database = {db:String} AND name = 'change_log'",
+        parameters={"db": database_name()},
+    ).result_rows[0][0]
+    assert engine == "MergeTree"  # append-only
+
+
 def test_strategy_assignments_table(ch_client):
     cols = {r[0]: r[1] for r in ch_client.query(
         f"DESCRIBE TABLE {database_name()}.strategy_assignments").result_rows}
