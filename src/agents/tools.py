@@ -31,26 +31,62 @@ from src.agents.state import (
 from src.ingestion.schemas import get_clickhouse_client
 
 
+SCOPE_ORDER = ("read", "write", "admin")
+
+
 @dataclass
 class Tool:
     name: str
     description: str
     args_model: type[BaseModel]
     handler: Callable[[BaseModel, Any], Any]
+    scope: str = "read"
 
 
 TOOL_REGISTRY: dict[str, Tool] = {}
 
+# Capability boundary: read = no mutation, write = mutates state, admin = code.
+TOOL_SCOPES: dict[str, str] = {
+    "run_backtest": "write",
+    "fit_params": "read",
+    "validate_params": "read",
+    "compare_variants": "read",
+    "evaluate_signal": "read",
+    "paper_summary": "read",
+    "system_health": "read",
+    "classify_universe": "read",
+    "list_universe": "read",
+    "add_symbol": "write",
+    "remove_symbol": "write",
+    "create_request": "write",
+    "list_requests": "read",
+    "register_strategy": "admin",
+}
+
 
 def register(name: str, description: str, args_model: type[BaseModel]):
     def deco(fn):
-        TOOL_REGISTRY[name] = Tool(name, description, args_model, fn)
+        TOOL_REGISTRY[name] = Tool(name, description, args_model, fn,
+                                   scope=TOOL_SCOPES.get(name, "read"))
         return fn
     return deco
 
 
 def _client(ch):
     return ch or get_clickhouse_client()
+
+
+def _tool_cooldown(ch):
+    from src.agents.breakers import BreakerStore
+    from src.agents.multi_llm import Cooldown
+    # Threshold is generous: legitimate per-symbol failures (e.g. no data)
+    # shouldn't trip it; 5 fast failures mean something systemic (e.g. DB down).
+    return Cooldown(threshold=5, seconds=60.0, store=BreakerStore(ch))
+
+
+def describe() -> list[dict]:
+    return [{"name": t.name, "scope": t.scope, "description": t.description}
+            for t in TOOL_REGISTRY.values()]
 
 
 @register("run_backtest", "Run backtest(s) for a strategy and store results.", BacktestArgs)
@@ -168,20 +204,39 @@ def _register_strategy(args: RegisterStrategyArgs, ch) -> dict:
                                        args.description, args.model)
 
 
-def invoke(name: str, args: dict | None = None, ch=None) -> ToolResult:
-    """Validate args and run a registered tool; never raises (errors in ToolResult)."""
+def invoke(name: str, args: dict | None = None, ch=None,
+           allow: tuple[str, ...] | list[str] | None = None) -> ToolResult:
+    """Validate args, enforce scope, and run a tool; never raises.
+
+    ``allow`` is the caller's capability set (default: all scopes). A tool whose
+    scope isn't allowed is refused before any work happens. Repeated failures
+    open a short breaker for that tool.
+    """
     tool = TOOL_REGISTRY.get(name)
     if tool is None:
         return ToolResult(ok=False, error=f"unknown tool: {name}")
+    if allow is not None and tool.scope not in set(allow):
+        return ToolResult(ok=False, error=f"scope denied: '{tool.scope}' requires "
+                                          f"one of {sorted(set(allow))}")
     try:
         parsed = tool.args_model(**(args or {}))
     except ValidationError as exc:
         return ToolResult(ok=False, error=f"invalid args: {exc}")
+
+    breaker = _tool_cooldown(ch) if ch is not None else None
+    key = f"tool:{name}"
+    if breaker is not None and breaker.should_skip(key):
+        return ToolResult(ok=False, error=f"circuit open for {name}")
+
     start = time.perf_counter()
     try:
         data = tool.handler(parsed, ch)
+        if breaker is not None:
+            breaker.record_success(key)
         return ToolResult(ok=True, data=data,
                           latency_ms=(time.perf_counter() - start) * 1000)
     except Exception as exc:  # tools are isolated: a failure never kills the run
+        if breaker is not None:
+            breaker.record_failure(key)
         return ToolResult(ok=False, error=str(exc),
                           latency_ms=(time.perf_counter() - start) * 1000)

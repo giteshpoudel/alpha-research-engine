@@ -49,6 +49,21 @@ def ch_client():
     return get_clickhouse_client()
 
 
+def test_tool_scopes_enforced(ch_client):
+    denied = tools.invoke("run_backtest", {"symbols": ["BTC"]}, ch=ch_client,
+                          allow=("read",))
+    assert denied.ok is False and "scope denied" in denied.error
+
+    allowed = tools.invoke("classify_universe", {"symbols": ["BTC"]}, ch=ch_client,
+                           allow=("read",))
+    assert allowed.ok is True
+
+    scopes = {t["name"]: t["scope"] for t in tools.describe()}
+    assert scopes["register_strategy"] == "admin"
+    assert scopes["run_backtest"] == "write"
+    assert scopes["classify_universe"] == "read"
+
+
 def test_classify_universe_tool(ch_client):
     result = tools.invoke("classify_universe", {"symbols": ["BTC", "DOGE"]}, ch=ch_client)
     assert result.ok

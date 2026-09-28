@@ -16,7 +16,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-from src.agents import goals, proposals, tools
+from src.agents import goals, proposals, scoring, tools
 from src.agents.multi_llm import chat as default_chat
 from src.agents.state import OptimizerState
 from src.agents.tracing import Budget, Tracer
@@ -241,7 +241,13 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
                   day=None, focus_symbol: str | None = None, tune_trials: int = 0,
                   avoid: set | None = None) -> dict:
     ch = ch or get_clickhouse_client()
-    chat_fn = chat_fn or default_chat
+    if chat_fn is None:
+        from src.agents.breakers import BreakerStore
+        from src.agents.multi_llm import Cooldown
+        cooldown = Cooldown(store=BreakerStore(ch))
+        chat_fn = (lambda role, system, user:
+                   default_chat(role, system, user, cooldown=cooldown))
+    started_at = time.monotonic()
     day = day or datetime.now(timezone.utc).date()
     goal = goals.ensure_goal(ch, day, goal_pct) if goal_pct else goals.ensure_goal(ch, day)
     achieved = goals.daily_profit_pct(ch)
@@ -314,6 +320,13 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
             goal_row = goals.raise_goal(ch, day)
         summary["goal"] = goal_row
         summary["achieved_pct"] = achieved_now
+
+    scoring.score_run(ch, summary["run_id"], adopted=summary["adopted"],
+                      proposals=len(summary["proposals"]),
+                      requests=len(summary["requests"]),
+                      tokens_in=run.tokens_in, tokens_out=run.tokens_out,
+                      cost_usd=run.cost_usd,
+                      duration_ms=(time.monotonic() - started_at) * 1000, status="done")
     return summary
 
 
@@ -354,6 +367,13 @@ def run_continuous(ch=None, interval: float = 300.0, max_iterations: int = 0,
         except Exception as exc:
             print(f"optimizer[{iterations}] iteration failed: {exc}")
         iterations += 1
+        if iterations % 10 == 0:
+            try:
+                regression = scoring.detect_regression(ch or get_clickhouse_client())
+                if regression:
+                    print(f"optimizer regression: {regression}")
+            except Exception:
+                pass
         if interval:
             time.sleep(interval)
     return {"iterations": iterations, "proposals": proposals_made, "adopted": adopted}

@@ -296,6 +296,24 @@ def test_paper_positions_table(ch_client):
     assert cols["updated_at"] == "DateTime64(3)"
 
 
+def test_circuit_breakers_table(ch_client):
+    cols = {r[0]: r[1] for r in ch_client.query(
+        f"DESCRIBE TABLE {database_name()}.circuit_breakers").result_rows}
+    assert cols["breaker"] == "String"
+    assert cols["failures"] == "UInt32"
+    assert cols["opened_until"] == "Nullable(DateTime64(3))"
+    assert cols["updated_at"] == "DateTime64(3)"
+
+
+def test_agent_run_scores_table(ch_client):
+    cols = {r[0]: r[1] for r in ch_client.query(
+        f"DESCRIBE TABLE {database_name()}.agent_run_scores").result_rows}
+    assert cols["run_id"] == "String"
+    assert cols["score"] == "Float64"
+    assert cols["flag"] == "LowCardinality(String)"
+    assert cols["adopted"] == "UInt32"
+
+
 def test_generated_strategies_table(ch_client):
     cols = {r[0]: r[1] for r in ch_client.query(
         f"DESCRIBE TABLE {database_name()}.generated_strategies").result_rows}

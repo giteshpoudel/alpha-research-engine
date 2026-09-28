@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -44,26 +45,48 @@ class _Endpoint:
 
 
 class Cooldown:
-    """Skip a provider after N consecutive failures for a cooldown window."""
+    """Skip a provider after N consecutive failures for a cooldown window.
 
-    def __init__(self, threshold: int = 3, seconds: float = 300.0):
+    With a ``store`` (a ``breakers.BreakerStore``) the state is persisted, so a
+    rate-limited provider stays skipped across process restarts.
+    """
+
+    def __init__(self, threshold: int = 3, seconds: float = 300.0, store=None):
         self.threshold = threshold
         self.seconds = seconds
+        self.store = store
         self.failures: dict[str, int] = {}
-        self.until: dict[str, float] = {}
+        self.until: dict[str, float | datetime] = {}
+
+    def _load(self, name: str) -> None:
+        if self.store is not None and name not in self.failures:
+            failures, opened_until = self.store.get(name)
+            self.failures[name] = failures
+            if opened_until is not None:
+                self.until[name] = opened_until
 
     def should_skip(self, name: str) -> bool:
-        return self.until.get(name, 0.0) > time.monotonic()
+        self._load(name)
+        until = self.until.get(name)
+        if self.store is not None:
+            return until is not None and until > datetime.now(timezone.utc)
+        return until is not None and until > time.monotonic()
 
     def record_failure(self, name: str) -> None:
+        self._load(name)
         count = self.failures.get(name, 0) + 1
         self.failures[name] = count
         if count >= self.threshold:
-            self.until[name] = time.monotonic() + self.seconds
+            self.until[name] = ((datetime.now(timezone.utc) + timedelta(seconds=self.seconds))
+                                if self.store is not None else time.monotonic() + self.seconds)
+        if self.store is not None:
+            self.store.save(name, count, self.until.get(name))
 
     def record_success(self, name: str) -> None:
         self.failures.pop(name, None)
         self.until.pop(name, None)
+        if self.store is not None:
+            self.store.save(name, 0, None)
 
 
 _GLOBAL_COOLDOWN = Cooldown()

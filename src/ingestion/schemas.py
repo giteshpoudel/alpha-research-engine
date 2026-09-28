@@ -485,6 +485,42 @@ ORDER BY (name)
 """
 
 
+# Persisted circuit-breaker state (survives process restarts).
+_CIRCUIT_BREAKERS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.circuit_breakers
+(
+    breaker String,
+    failures UInt32,
+    opened_until Nullable(DateTime64(3)),
+    updated_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (breaker)
+"""
+
+# Per-run quality scores (eval loop feeding regressions).
+_AGENT_RUN_SCORES_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.agent_run_scores
+(
+    run_id String,
+    kind LowCardinality(String),
+    score Float64,
+    flag LowCardinality(String),
+    adopted UInt32,
+    proposals UInt32,
+    requests UInt32,
+    tokens_in UInt64,
+    tokens_out UInt64,
+    cost_usd Float64,
+    duration_ms Float32,
+    status LowCardinality(String),
+    created_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (run_id)
+"""
+
+
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
@@ -504,7 +540,7 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
                 _SIGNAL_EVAL_DDL, _SYMBOL_METADATA_DDL, _AGENT_RUNS_DDL, _AGENT_STEPS_DDL,
                 _STRATEGY_PROPOSALS_DDL, _AGENT_GOALS_DDL, _UNIVERSE_DDL,
                 _AGENT_REQUESTS_DDL, _STRATEGY_ASSIGNMENTS_DDL, _CHANGE_LOG_DDL,
-                _GENERATED_STRATEGIES_DDL):
+                _GENERATED_STRATEGIES_DDL, _CIRCUIT_BREAKERS_DDL, _AGENT_RUN_SCORES_DDL):
         client.command(ddl.format(db=db))
 
     if legacy_tuned:

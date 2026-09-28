@@ -61,10 +61,9 @@ def ch(change_log_guard):
 
 def _cleanup_run(ch, run_id):
     if run_id:
-        ch.command(f"ALTER TABLE {database_name()}.agent_steps DELETE WHERE run_id = '{run_id}'",
-                   settings={"mutations_sync": 1})
-        ch.command(f"ALTER TABLE {database_name()}.agent_runs DELETE WHERE run_id = '{run_id}'",
-                   settings={"mutations_sync": 1})
+        for table in ("agent_steps", "agent_runs", "agent_run_scores"):
+            ch.command(f"ALTER TABLE {database_name()}.{table} "
+                       f"DELETE WHERE run_id = '{run_id}'", settings={"mutations_sync": 1})
 
 
 def test_run_optimizer_creates_and_evaluates_proposal(ch):
