@@ -73,20 +73,30 @@ def add_symbol(ch, symbol: str, aliases: list[str] | None = None,
     enabled = True
     if backfill:
         from src.ingestion.binance_us import backfill_ohlcv
+        from src.ingestion.coinbase import backfill_coinbase
         from src.ingestion.hyperliquid import backfill_funding
         from src.ingestion.market_data import max_ts
         try:
             stats["ohlcv"] = backfill_ohlcv(ch, symbols=(symbol,),
                                             intervals=("1h", "1d"), start=_OHLCV_START)
         except Exception as exc:
-            stats["ohlcv_error"] = str(exc)
+            stats["binance_error"] = str(exc)
+        if max_ts(ch, "ohlcv", "binance_us", symbol, "1h") is None:
+            # fall back to Coinbase where the symbol isn't on Binance.US
+            try:
+                stats["ohlcv_coinbase"] = backfill_coinbase(
+                    ch, symbols=(symbol,), intervals=("1h", "1d"), start=_OHLCV_START)
+            except Exception as exc:
+                stats["coinbase_error"] = str(exc)
         try:
             stats["funding"] = backfill_funding(ch, coins=(symbol,), start=_FUNDING_START)
         except Exception as exc:
             stats["funding_error"] = str(exc)
-        if max_ts(ch, "ohlcv", "binance_us", symbol, "1h") is None:
-            enabled = False  # not tradable on the US provider we backfill from
-            stats["note"] = "no ohlcv found; registered disabled"
+        have_ohlcv = (max_ts(ch, "ohlcv", "binance_us", symbol, "1h") is not None
+                      or max_ts(ch, "ohlcv", "coinbase", symbol, "1h") is not None)
+        if not have_ohlcv:
+            enabled = False  # not tradable on the US venues we backfill from
+            stats["note"] = "no ohlcv on binance_us/coinbase; registered disabled"
     stats["enabled"] = enabled
     _write(ch, symbol, enabled, aliases, notes)
     return stats

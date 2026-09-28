@@ -14,11 +14,17 @@ import httpx
 
 from src.ingestion.http import get_with_backoff
 from src.ingestion.market_data import insert_ohlcv, max_ts
+from src.ingestion.tickers import TICKER_ALIASES
 
 MATIC_MIGRATION = datetime(2024, 9, 4, tzinfo=timezone.utc)
 
 _INTERVAL_SECONDS = {"1h": 3600, "1d": 86400}
 _MAX_CANDLES = 300  # Coinbase per-request cap
+
+
+def _closed_end(now: datetime, secs: int) -> datetime:
+    epoch = int(now.timestamp())
+    return datetime.fromtimestamp(epoch - (epoch % secs), tz=timezone.utc)
 
 
 def map_candle(interval: str, c: list, symbol: str = "MATIC") -> dict:
@@ -60,6 +66,46 @@ def fetch_candles(http_client: httpx.Client, product: str, interval: str,
         cursor = window_end
     rows.sort(key=lambda r: r["ts"])
     return rows
+
+
+def backfill_coinbase(ch_client, http_client: httpx.Client | None = None,
+                      symbols: tuple[str, ...] | None = None,
+                      intervals: tuple[str, ...] = ("1h", "1d"),
+                      start: datetime | None = None,
+                      end: datetime | None = None) -> int:
+    """Backfill ``{SYMBOL}-USD`` candles for symbols not served by Binance.US.
+
+    Resumable via max_ts (exchange='coinbase'). MATIC is excluded (use
+    ``backfill_matic`` for the MATIC->POL migration). A failing symbol is
+    logged and skipped, never fatal.
+    """
+    from datetime import datetime as _dt  # local import keeps module import light
+
+    symbols = symbols or tuple(s for s in TICKER_ALIASES if s != "MATIC")
+    start = start or datetime(2017, 1, 1, tzinfo=timezone.utc)
+    owns_client = http_client is None
+    http_client = http_client or httpx.Client()
+    inserted = 0
+    try:
+        for symbol in symbols:
+            for interval in intervals:
+                secs = _INTERVAL_SECONDS[interval]
+                resume = max_ts(ch_client, "ohlcv", "coinbase", symbol, interval)
+                window_start = (max(start, resume + timedelta(seconds=secs))
+                                if resume else start)
+                window_end = end or _closed_end(_dt.now(timezone.utc), secs)
+                if window_start >= window_end:
+                    continue
+                try:
+                    rows = fetch_candles(http_client, f"{symbol}-USD", interval,
+                                         window_start, window_end, symbol=symbol)
+                    inserted += insert_ohlcv(ch_client, rows)
+                except Exception as exc:
+                    print(f"coinbase: skipping {symbol} {interval}: {exc}")
+    finally:
+        if owns_client:
+            http_client.close()
+    return inserted
 
 
 def backfill_matic(ch_client, http_client: httpx.Client | None = None,

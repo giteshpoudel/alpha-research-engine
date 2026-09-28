@@ -5,6 +5,7 @@ import pytest
 
 from src.ingestion.coinbase import (
     MATIC_MIGRATION,
+    backfill_coinbase,
     backfill_matic,
     fetch_candles,
     map_candle,
@@ -77,3 +78,21 @@ def test_backfill_splits_at_migration(ch_client):
 def timedelta_days(n):
     from datetime import timedelta
     return timedelta(days=n)
+
+
+def test_backfill_coinbase_generic_symbol(ch_client):
+    def handler(req):
+        candle = list(CANDLE)
+        candle[0] = int(datetime.fromisoformat(req.url.params["start"]).timestamp())
+        return httpx.Response(200, json=[candle])
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    end = datetime(2022, 1, 1, 4, 0, tzinfo=timezone.utc)
+    inserted = backfill_coinbase(ch_client, http_client=client, symbols=("TEST",),
+                                 intervals=("1h",), start=T0, end=end)
+    assert inserted >= 1
+    rows = ch_client.query(
+        f"SELECT count() FROM {database_name()}.ohlcv FINAL "
+        "WHERE symbol = 'TEST' AND exchange = 'coinbase'"
+    ).result_rows
+    assert rows[0][0] >= 1
