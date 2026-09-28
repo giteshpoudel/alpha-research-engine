@@ -21,6 +21,7 @@ from src.agents.state import (
     CompareArgs,
     CreateRequestArgs,
     EmptyArgs,
+    RegisterStrategyArgs,
     FitArgs,
     SignalArgs,
     SymbolArg,
@@ -158,6 +159,13 @@ def _create_request(args: CreateRequestArgs, ch) -> dict:
 def _list_requests(args: EmptyArgs, ch) -> list[dict]:
     from src.agents.requests import list_requests
     return list_requests(_client(ch))
+
+
+@register("register_strategy", "Sandbox-validate and register an agent-generated strategy (paper-only).", RegisterStrategyArgs)
+def _register_strategy(args: RegisterStrategyArgs, ch) -> dict:
+    from src.agents.strategy_gen import register_generated_strategy
+    return register_generated_strategy(_client(ch), args.name, args.code,
+                                       args.description, args.model)
 
 
 def invoke(name: str, args: dict | None = None, ch=None) -> ToolResult:

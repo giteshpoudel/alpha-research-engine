@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 import pytest
@@ -13,6 +14,16 @@ PROPOSAL = ('{"action":"propose_params","symbol":"BTC",'
 NONE = '{"action":"none"}'
 REQUEST = ('{"action":"request","kind":"data","title":"TESTREQ social chatter",'
            '"justification":"social signal may help","expected_impact":"+0.3%"}')
+_GEN_CODE = ("import pandas as pd\n"
+             "DEFAULTS = {'window': 5}\n"
+             "def signals(close, window=5):\n"
+             "    ma = close.rolling(window).mean()\n"
+             "    cond = close > ma\n"
+             "    return (cond & ~cond.shift(1, fill_value=False)).fillna(False).astype(bool), "
+             "(~cond & cond.shift(1, fill_value=False)).fillna(False).astype(bool)\n")
+ADD_STRATEGY = json.dumps({"action": "add_strategy", "name": "testgen_opt",
+                           "code": _GEN_CODE, "symbol": "ZZZTESTSYM",
+                           "description": "d"})
 
 
 class _Res:
@@ -108,6 +119,27 @@ def test_run_optimizer_tune_iteration(ch, monkeypatch):
         assert result["proposals"][0]["decision"] in {"adopted", "rejected"}
     finally:
         _cleanup_run(ch, result["run_id"])
+
+
+def test_run_optimizer_add_strategy(ch):
+    from src.backtesting.strategies import registry
+
+    def stub(role, system, user):
+        return _Res(ADD_STRATEGY)
+
+    result = optimizer.run_optimizer(ch=ch, loops=1, strategy="TEST_mean_reversion",
+                                     chat_fn=stub, day=DAY)
+    try:
+        assert result["run_id"]
+        assert "testgen_opt" in registry.SIGNAL_FUNCS
+    finally:
+        _cleanup_run(ch, result["run_id"])
+        (registry.GENERATED_DIR / "testgen_opt.py").unlink(missing_ok=True)
+        registry.load_generated()
+        ch.command(f"ALTER TABLE {database_name()}.generated_strategies DELETE "
+                   "WHERE name = 'testgen_opt'", settings={"mutations_sync": 1})
+        ch.command(f"ALTER TABLE {database_name()}.strategy_proposals DELETE "
+                   "WHERE symbol = 'ZZZTESTSYM'", settings={"mutations_sync": 1})
 
 
 def test_run_optimizer_request_action(ch):

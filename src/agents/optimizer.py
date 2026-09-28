@@ -33,16 +33,24 @@ _PLANNER_SYSTEM = (
     '"params":{...},"hypothesis":"<one sentence>","analysis":"<one or two sentences>"}\n'
     '   (mean_reversion params: window 12-72, z_entry -3.5..-1.0, z_exit -0.5..0.5)\n'
     '2) switch a symbol to a different strategy: {"action":"switch_strategy",'
-    '"symbol":"<TICKER>","strategy":"mean_reversion"|"momentum"|"breakout",'
+    '"symbol":"<TICKER>","strategy":"<name>",'
     '"hypothesis":"<one sentence>","analysis":"<one or two sentences>"}\n'
-    '3) ask the human for data/API or a major change: {"action":"request",'
+    '3) add a NEW strategy (paper-only, sandboxed): {"action":"add_strategy",'
+    '"name":"<lowercase_snake>","code":"<python source>","symbol":"<TICKER>",'
+    '"description":"<one sentence>"}\n'
+    '   The code must define signals(close, **params) -> (entries, exits) boolean '
+    'pandas Series, plus DEFAULTS dict (and optional SEARCH(trial) -> params dict). '
+    'Imports allowed: numpy, pandas, math only. No while loops, no reflection.\n'
+    '4) ask the human for data/API or a major change: {"action":"request",'
     '"kind":"data"|"api"|"change","title":"<short>",'
     '"justification":"<why it should improve profit>","expected_impact":"<estimate>"}\n'
-    '4) do nothing: {"action":"none"}\n'
-    "Match strategy style to the symbol: momentum/breakout for trending majors, "
-    "mean_reversion for choppy/penny/meme names. Prefer propose_params for small "
-    "tweaks; use switch_strategy when a different approach fits better. Use request "
-    "ONLY when new data/APIs or a major change is the real blocker."
+    '5) do nothing: {"action":"none"}\n'
+    "Strategies available: the built-ins (mean_reversion, momentum, breakout) plus "
+    "any generated ones in \"strategies\". Match style to the symbol (momentum/"
+    "breakout for trending majors; mean_reversion for choppy/penny/meme names). "
+    "Prefer propose_params for small tweaks; switch_strategy when another existing "
+    "strategy fits better; add_strategy when a genuinely new idea is warranted. "
+    "Use request ONLY when new data/APIs or a major change is the real blocker."
 )
 
 _EXECUTOR_SYSTEM = (
@@ -158,10 +166,32 @@ def _llm(chat_fn, role: str, system: str, user: str, run, budget: Budget):
     return result
 
 
-def _execute_plan(plan: dict | None, ch, run, strategy: str, publish_adopted: bool) -> dict:
+def _execute_plan(plan: dict | None, ch, run, strategy: str, publish_adopted: bool,
+                  focus: str | None = None) -> dict:
     if not plan:
         run.step("no_action", {"plan": plan}, {"action": "none"})
         return {"action": "none"}
+    if plan.get("action") == "add_strategy":
+        from src.agents.strategy_gen import register_generated_strategy
+        registered = register_generated_strategy(
+            ch, plan.get("name", ""), plan.get("code", ""),
+            plan.get("description", ""), plan.get("model", ""))
+        run.step("add_strategy", {"name": plan.get("name")}, registered)
+        if not registered.get("registered"):
+            return {"action": "none", "errors": registered.get("errors")}
+        symbol = plan.get("symbol") or focus
+        if not symbol:
+            return {"action": "registered", "name": registered["name"]}
+        change = {"strategy": registered["name"], "symbol": symbol, "params": {}}
+        proposal_id = proposals.create_proposal(
+            ch, f"assign new strategy {registered['name']} to {symbol}", change,
+            kind="strategy", symbol=symbol, model=plan.get("model", ""), run_id=run.run_id)
+        row = proposals.evaluate_proposal(ch, proposal_id, publish_adopted=publish_adopted,
+                                          run_id=run.run_id)
+        run.step("proposal", {"proposal_id": proposal_id, "change": change},
+                 {"decision": row["decision"], "evidence": row["evidence"]})
+        return {"action": "proposal", "kind": "strategy", "proposal_id": proposal_id,
+                "decision": row["decision"]}
     if plan.get("action") == "request":
         from src.agents import requests as requests_mod
         request_id = requests_mod.create_request(
@@ -266,7 +296,8 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
                         plan.setdefault("model", planner_model)
                 plan_symbol = plan.get("symbol") if plan else None
                 plan_strategy = assignments.get(plan_symbol, strategy) if plan_symbol else strategy
-                outcome = _execute_plan(plan, ch, run, plan_strategy, publish_adopted)
+                outcome = _execute_plan(plan, ch, run, plan_strategy, publish_adopted,
+                                        focus=focus)
                 state.loops += 1
                 summary["loops"] += 1
                 if outcome["action"] == "proposal":

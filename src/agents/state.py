@@ -88,3 +88,10 @@ class CreateRequestArgs(BaseModel):
     justification: str
     kind: str = "data"
     expected_impact: str = ""
+
+
+class RegisterStrategyArgs(BaseModel):
+    name: str
+    code: str
+    description: str = ""
+    model: str = ""
