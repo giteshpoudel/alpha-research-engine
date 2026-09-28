@@ -11,6 +11,8 @@ PROPOSAL = ('{"action":"propose_params","symbol":"BTC",'
             '"params":{"window":24,"z_entry":-2.0,"z_exit":0.0},'
             '"hypothesis":"h","analysis":"a"}')
 NONE = '{"action":"none"}'
+REQUEST = ('{"action":"request","kind":"data","title":"TESTREQ social chatter",'
+           '"justification":"social signal may help","expected_impact":"+0.3%"}')
 
 
 class _Res:
@@ -74,6 +76,21 @@ def test_run_optimizer_creates_and_evaluates_proposal(ch):
         assert steps >= 3  # observe + planner + executor + proposal
     finally:
         _cleanup_run(ch, result["run_id"])
+
+
+def test_run_optimizer_request_action(ch):
+    def stub(role, system, user):
+        return _Res(REQUEST)
+
+    result = optimizer.run_optimizer(ch=ch, loops=1, strategy=STRATEGY,
+                                     chat_fn=stub, day=DAY)
+    try:
+        assert result["proposals"] == []
+        assert result["requests"] and result["requests"][0]["action"] == "request"
+    finally:
+        _cleanup_run(ch, result["run_id"])
+        ch.command(f"ALTER TABLE {database_name()}.agent_requests DELETE "
+                   "WHERE title LIKE 'TESTREQ%'", settings={"mutations_sync": 1})
 
 
 def test_run_optimizer_no_action(ch):

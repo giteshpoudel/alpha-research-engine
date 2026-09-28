@@ -243,6 +243,19 @@ def collect_portfolio_data(ch_client) -> dict:
     }
 
 
+def collect_requests(ch_client) -> dict:
+    """Open optimizer requests to the human."""
+    rows = ch_client.query(
+        f"""
+        SELECT request_id, kind, title, justification, expected_impact, created_at
+        FROM {database_name()}.agent_requests FINAL
+        WHERE status = 'open' ORDER BY created_at DESC LIMIT 20
+        """
+    ).result_rows
+    keys = ("request_id", "kind", "title", "justification", "expected_impact", "created_at")
+    return {"open": [dict(zip(keys, r)) for r in rows]}
+
+
 def collect_signal_data(ch_client) -> dict:
     """Strongest statistically significant sentiment predictive results."""
     rows = ch_client.query(

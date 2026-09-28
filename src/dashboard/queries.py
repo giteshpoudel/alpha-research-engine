@@ -388,6 +388,26 @@ def proposals(client, db: str | None = None, limit: int = 50) -> list[dict]:
     return [dict(zip(_PROPOSAL_COLUMNS, row)) for row in rows]
 
 
+# ---------- Optimizer requests ----------
+
+_REQUEST_COLUMNS = ("request_id", "run_id", "kind", "title", "justification",
+                    "expected_impact", "status", "model", "created_at",
+                    "decided_at", "decision_note")
+
+
+def agent_requests(client, db: str | None = None, status: str | None = None,
+                   limit: int = 50) -> list[dict]:
+    where, params = "", {"n": limit}
+    if status:
+        where, params["s"] = "WHERE status = {s:String}", status
+    rows = client.query(
+        f"SELECT {', '.join(_REQUEST_COLUMNS)} FROM {_db(db)}.agent_requests FINAL "
+        f"{where} ORDER BY created_at DESC LIMIT {{n:UInt32}}",
+        parameters=params,
+    ).result_rows
+    return [dict(zip(_REQUEST_COLUMNS, row)) for row in rows]
+
+
 # ---------- Signal evaluation ----------
 
 

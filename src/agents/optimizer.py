@@ -27,11 +27,17 @@ _PLANNER_SYSTEM = (
     "You are the planning half of an autonomous crypto strategy optimizer for a "
     "research/paper-trading system. You optimize the mean-reversion strategy's "
     "parameters per symbol. The harness enforces out-of-sample discipline for you.\n"
-    "Respond with STRICT JSON only, no prose:\n"
-    '{"action":"propose_params"|"none","symbol":"<TICKER>",'
+    "Respond with STRICT JSON only, no prose. Choose ONE action:\n"
+    '1) parameter change: {"action":"propose_params","symbol":"<TICKER>",'
     '"params":{"window":<int>,"z_entry":<float>,"z_exit":<float>},'
     '"hypothesis":"<one sentence>","analysis":"<one or two sentences>"}\n'
-    'If no change is justified use {"action":"none"}. '
+    '2) ask the human for data/API or a major change: {"action":"request",'
+    '"kind":"data"|"api"|"change","title":"<short>",'
+    '"justification":"<why it should improve profit>","expected_impact":"<estimate>"}\n'
+    '3) do nothing: {"action":"none"}\n'
+    "Prefer propose_params when the evidence supports a parameter change. Use "
+    "request ONLY when new data/APIs or a guardrail/major change is the real "
+    "blocker, and justify the expected profit impact. "
     "Keep params within window 12-72, z_entry -3.5..-1.0, z_exit -0.5..0.5."
 )
 
@@ -94,7 +100,19 @@ def _llm(chat_fn, role: str, system: str, user: str, run, budget: Budget):
 
 
 def _execute_plan(plan: dict | None, ch, run, strategy: str, publish_adopted: bool) -> dict:
-    if not plan or plan.get("action") != "propose_params" or not validate_params(plan.get("params")):
+    if not plan:
+        run.step("no_action", {"plan": plan}, {"action": "none"})
+        return {"action": "none"}
+    if plan.get("action") == "request":
+        from src.agents import requests as requests_mod
+        request_id = requests_mod.create_request(
+            ch, plan.get("title", ""), plan.get("justification", ""),
+            kind=plan.get("kind", "data"), expected_impact=plan.get("expected_impact", ""),
+            model=plan.get("model", ""), run_id=run.run_id)
+        run.step("request", {"request_id": request_id, "title": plan.get("title", "")},
+                 {"action": "request"})
+        return {"action": "request", "request_id": request_id}
+    if plan.get("action") != "propose_params" or not validate_params(plan.get("params")):
         run.step("no_action", {"plan": plan}, {"action": "none"})
         return {"action": "none"}
     change = {"strategy": strategy, "symbol": plan["symbol"], "params": plan["params"]}
@@ -121,7 +139,7 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
     state = OptimizerState(goal_profit_pct=float(goal["target_profit_pct"]), max_loops=loops)
     budget = Budget(max_cost_usd=max_cost_usd, max_steps=max_steps)
 
-    summary = {"loops": 0, "proposals": [], "adopted": 0,
+    summary = {"loops": 0, "proposals": [], "requests": [], "adopted": 0,
                "goal": goal, "achieved_pct": achieved, "run_id": ""}
     with Tracer(ch).run(kind="optimizer",
                         goal={"target_profit_pct": float(goal["target_profit_pct"]),
@@ -153,6 +171,8 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
                 summary["proposals"].append(outcome)
                 if outcome["decision"] == "adopted":
                     summary["adopted"] += 1
+            elif outcome["action"] == "request":
+                summary["requests"].append(outcome)
 
         run.loops = state.loops
         achieved_now = goals.daily_profit_pct(ch)

@@ -225,6 +225,23 @@ def create_app() -> FastAPI:
             for row in queries.proposals(client, db=db)
         ]
 
+    @app.get("/requests", response_class=HTMLResponse)
+    def requests_page(request: Request):
+        client, db = _conn()
+        return templates.TemplateResponse(
+            request, "requests.html",
+            {"request": request, "active": "requests",
+             "rows": queries.agent_requests(client, db=db)},
+        )
+
+    @app.get("/api/requests")
+    def api_requests():
+        client, db = _conn()
+        return [
+            {k: (str(v) if hasattr(v, "isoformat") else v) for k, v in row.items()}
+            for row in queries.agent_requests(client, db=db)
+        ]
+
     @app.get("/api/health")
     def api_health():
         client, db = _conn()

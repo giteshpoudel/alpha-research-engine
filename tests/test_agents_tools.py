@@ -61,6 +61,21 @@ def test_system_health_tool(ch_client):
     assert result.ok and "ohlcv_latest" in result.data
 
 
+def test_request_tools(ch_client):
+    from src.ingestion.schemas import database_name
+
+    created = tools.invoke("create_request",
+                           {"title": "TESTREQ tool", "justification": "j",
+                            "kind": "data", "expected_impact": "+"}, ch=ch_client)
+    try:
+        assert created.ok and created.data["request_id"]
+        assert tools.invoke("list_requests", {}, ch=ch_client).ok
+    finally:
+        ch_client.command(
+            f"ALTER TABLE {database_name()}.agent_requests DELETE WHERE title LIKE 'TESTREQ%'",
+            settings={"mutations_sync": 1})
+
+
 def test_universe_tools(ch_client):
     from src.ingestion.schemas import database_name
 

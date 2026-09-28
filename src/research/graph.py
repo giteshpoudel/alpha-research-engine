@@ -21,6 +21,7 @@ class ReportState(TypedDict, total=False):
     macro_data: dict
     portfolio_data: dict
     signal_data: dict
+    requests_data: dict
     risk_section: str
     macro_section: str
     report_md: str
@@ -74,6 +75,18 @@ def _portfolio_md(portfolio: dict) -> str:
     return "\n".join(lines)
 
 
+def _requests_md(requests_data: dict) -> str:
+    lines = ["## Optimizer Requests", ""]
+    rows = requests_data.get("open") or []
+    if not rows:
+        lines.append("No open requests.")
+        return "\n".join(lines)
+    for row in rows:
+        lines.append(f"- **[{row['kind']}] {row['title']}** — {row['justification']} "
+                     f"(expected: {row['expected_impact']})")
+    return "\n".join(lines)
+
+
 def _signal_md(signal: dict) -> str:
     lines = ["## Sentiment Signal", ""]
     top = signal.get("top_ic") or []
@@ -105,6 +118,8 @@ def _data_summary(state: ReportState) -> str:
     lines.append("")
     lines.append(_signal_md(state.get("signal_data", {})))
     lines.append("")
+    lines.append(_requests_md(state.get("requests_data", {})))
+    lines.append("")
     lines.append("Portfolio figures are strategy-implied (research/backtest "
                  "scope), not real holdings. Not financial advice.")
     return "\n".join(lines)
@@ -123,6 +138,7 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
         "report_date": report_date,
         "portfolio_data": collectors.collect_portfolio_data(ch_client),
         "signal_data": collectors.collect_signal_data(ch_client),
+        "requests_data": collectors.collect_requests(ch_client),
     }
     # Identity check: tests inject a stub chat_fn; production uses llm.chat.
     model = "mock" if chat_fn is not chat else active_model()
@@ -138,7 +154,8 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
         for key, fn in (("risk_data", collectors.collect_risk_data),
                         ("macro_data", collectors.collect_macro_data),
                         ("portfolio_data", collectors.collect_portfolio_data),
-                        ("signal_data", collectors.collect_signal_data)):
+                        ("signal_data", collectors.collect_signal_data),
+                        ("requests_data", collectors.collect_requests)):
             if key not in state:
                 state[key] = fn(ch_client)
         risk_section = _data_summary(state)
@@ -149,7 +166,8 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
     # appear, regardless of what the LLM editor chose to include.
     portfolio_section = _portfolio_md(state.get("portfolio_data", {}))
     signal_section = _signal_md(state.get("signal_data", {}))
-    for section in (portfolio_section, signal_section):
+    requests_section = _requests_md(state.get("requests_data", {}))
+    for section in (portfolio_section, signal_section, requests_section):
         heading = section.splitlines()[0]
         if heading and heading not in report_md:
             report_md += "\n\n" + section
@@ -165,6 +183,7 @@ def run_report(ch_client, report_date: date, out_dir: Path | None = None,
         [report_date, "macro", macro_section, model, now],
         [report_date, "portfolio", portfolio_section, model, now],
         [report_date, "signal", signal_section, model, now],
+        [report_date, "requests", requests_section, model, now],
         [report_date, "report", report_md, model, now],
     ]
     ch_client.insert(

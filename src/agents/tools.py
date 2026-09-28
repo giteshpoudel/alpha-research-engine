@@ -19,6 +19,7 @@ from src.agents.state import (
     BacktestArgs,
     ClassifyArgs,
     CompareArgs,
+    CreateRequestArgs,
     EmptyArgs,
     FitArgs,
     SignalArgs,
@@ -143,6 +144,20 @@ def _add_symbol(args: AddSymbolArgs, ch) -> dict:
 def _remove_symbol(args: SymbolArg, ch) -> dict:
     from src.ingestion.universe import remove_symbol
     return remove_symbol(_client(ch), args.symbol)
+
+
+@register("create_request", "File a request to the human (data/API/major change) with justification.", CreateRequestArgs)
+def _create_request(args: CreateRequestArgs, ch) -> dict:
+    from src.agents.requests import create_request
+    return {"request_id": create_request(
+        _client(ch), args.title, args.justification, kind=args.kind,
+        expected_impact=args.expected_impact)}
+
+
+@register("list_requests", "List optimizer requests to the human.", EmptyArgs)
+def _list_requests(args: EmptyArgs, ch) -> list[dict]:
+    from src.agents.requests import list_requests
+    return list_requests(_client(ch))
 
 
 def invoke(name: str, args: dict | None = None, ch=None) -> ToolResult:

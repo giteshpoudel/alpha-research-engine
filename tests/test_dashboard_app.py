@@ -43,6 +43,13 @@ def test_run_page_404(client):
     assert resp.status_code == 404
 
 
+def test_requests_page_and_api(client):
+    resp = client.get("/requests")
+    assert resp.status_code == 200
+    assert 'href="/requests"' in resp.text  # nav link enabled
+    assert isinstance(client.get("/api/requests").json(), list)
+
+
 def test_proposals_page_and_api(client):
     resp = client.get("/proposals")
     assert resp.status_code == 200

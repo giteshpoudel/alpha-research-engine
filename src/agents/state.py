@@ -81,3 +81,10 @@ class AddSymbolArgs(BaseModel):
 
 class SymbolArg(BaseModel):
     symbol: str
+
+
+class CreateRequestArgs(BaseModel):
+    title: str
+    justification: str
+    kind: str = "data"
+    expected_impact: str = ""

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Requests · Alpha Research{% endblock %}
+{% block content %}
+<h1>Optimizer Requests</h1>
+<p class="muted">
+  Data/API additions and major changes the optimizer wants you to make, with its
+  justification and expected profit impact. Review via
+  <code>python -m src.agents.requests</code>.
+</p>
+{% if not rows %}
+  <p class="muted">No requests.</p>
+{% else %}
+<table>
+  <thead>
+    <tr><th>Created</th><th>Kind</th><th>Status</th><th>Title</th>
+        <th>Justification</th><th>Expected impact</th></tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="muted">{{ row.created_at }}</td>
+      <td>{{ row.kind }}</td>
+      <td>{% if row.status == 'approved' %}<span class="tag">approved</span>
+          {% elif row.status == 'rejected' %}<span class="tag prelim">rejected</span>
+          {% else %}{{ row.status }}{% endif %}</td>
+      <td>{{ row.title }}</td>
+      <td>{{ row.justification }}</td>
+      <td class="muted">{{ row.expected_impact }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}
