@@ -78,6 +78,38 @@ def test_run_optimizer_creates_and_evaluates_proposal(ch):
         _cleanup_run(ch, result["run_id"])
 
 
+def test_focus_symbol_prioritizes_halted(ch):
+    observed = {
+        "assignments": {"BTC": "mean_reversion", "ETH": "mean_reversion"},
+        "paper": {"sleeves": [{"symbol": "BTC", "enabled": False},
+                              {"symbol": "ETH", "enabled": True}]},
+    }
+    focus, strategy = optimizer._focus_symbol(ch, observed, set())
+    assert focus == "BTC" and strategy == "mean_reversion"
+
+
+def test_focus_symbol_avoids_recent(ch):
+    observed = {"assignments": {"BTC": "mean_reversion", "ETH": "mean_reversion"},
+                "paper": {"sleeves": []}}
+    focus, _ = optimizer._focus_symbol(ch, observed, {"BTC"})
+    assert focus == "ETH"
+
+
+def test_run_optimizer_tune_iteration(ch, monkeypatch):
+    monkeypatch.setattr(optimizer, "_observe", lambda c: {
+        "health": {}, "symbols": [], "strategies": ["mean_reversion"],
+        "assignments": {"BTC": "TEST_mean_reversion"}, "paper": {"sleeves": []},
+    })
+    result = optimizer.run_optimizer(ch=ch, loops=1, strategy="TEST_mean_reversion",
+                                     focus_symbol="BTC", tune_trials=3, day=DAY)
+    try:
+        assert result["mode"] == "tune"
+        assert result["proposals"] and result["proposals"][0].get("kind") == "params"
+        assert result["proposals"][0]["decision"] in {"adopted", "rejected"}
+    finally:
+        _cleanup_run(ch, result["run_id"])
+
+
 def test_run_optimizer_request_action(ch):
     def stub(role, system, user):
         return _Res(REQUEST)

@@ -20,6 +20,7 @@ from src.ingestion.schemas import database_name
 from src.meta_learning.assignments import assigned_strategy, set_assignment
 from src.meta_learning.params import get_tuned_params
 from src.meta_learning.tuner import (
+    DEFAULT_ADOPT_MARGIN,
     adopt_candidate,
     publish,
     validate_params,
@@ -117,7 +118,8 @@ def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
         baseline = get_tuned_params(ch, strategy, symbol)
         incumbent_val = (validate_params(ch, strategy, symbol, baseline, folds)
                          if baseline else None)
-        adopted = candidate_val is not None and adopt_candidate(candidate_val, incumbent_val)
+        adopted = candidate_val is not None and adopt_candidate(
+            candidate_val, incumbent_val, margin=DEFAULT_ADOPT_MARGIN)
         if adopted and publish_adopted and candidate_val is not None:
             publish(ch, strategy, symbol, _record(params, candidate_val, len(folds)),
                     datetime.now(timezone.utc))
@@ -135,7 +137,8 @@ def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
         incumbent_val = validate_params(ch, incumbent_strategy, symbol, incumbent_params, folds)
         baseline = {"strategy": incumbent_strategy, "params": incumbent_params}
         adopted = candidate == incumbent_strategy or (
-            candidate_val is not None and adopt_candidate(candidate_val, incumbent_val))
+            candidate_val is not None and adopt_candidate(
+                candidate_val, incumbent_val, margin=DEFAULT_ADOPT_MARGIN))
         if adopted and publish_adopted and candidate_val is not None:
             publish(ch, candidate, symbol, _record(candidate_params, candidate_val, len(folds)),
                     datetime.now(timezone.utc))

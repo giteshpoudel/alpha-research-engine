@@ -130,7 +130,7 @@ python -m src.research.signal_eval --no-store  # print only
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (249 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (253 tests; integration tests need the Docker stack up).
 
 ## How it works
 
@@ -154,7 +154,7 @@ src/
                 # tool registry, tracing + cost, multi-LLM clients, proposals, daily-goal loop
 config/         # launchd plists: stack (login + 30 min), dashboard (always-on),
                 # pipeline (5 min), backfill (daily), hackernews (daily), paper (hourly),
-                # retune (monthly), signal_eval + report (daily), optimizer (daily)
+                # retune (monthly), signal_eval + report (daily), optimizer (continuous)
 docs/           # blueprint + design specs + implementation plans
 tests/          # 141 tests: unit + integration against live services
 ```

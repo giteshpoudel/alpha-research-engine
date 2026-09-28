@@ -147,13 +147,17 @@ def validate_params(ch_client, strategy: str, symbol: str, params: dict,
     return sum(values) / len(values) if values else None
 
 
-def adopt_candidate(candidate_val: float | None, incumbent_val: float | None) -> bool:
-    """Champion/challenger: adopt only if the candidate is not worse."""
+DEFAULT_ADOPT_MARGIN = 0.01
+
+
+def adopt_candidate(candidate_val: float | None, incumbent_val: float | None,
+                    margin: float = 0.0) -> bool:
+    """Champion/challenger: adopt only if the candidate beats the incumbent by ``margin``."""
     if incumbent_val is None:
         return True
     if candidate_val is None:
         return False
-    return candidate_val >= incumbent_val
+    return candidate_val >= incumbent_val + margin
 
 
 def tune(ch_client, strategy: str, symbol: str, n_trials: int = 60,

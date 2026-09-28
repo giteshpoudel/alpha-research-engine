@@ -73,6 +73,13 @@ def test_adopt_candidate_rules():
     assert adopt_candidate(None, 0.5) is False    # candidate undefined -> reject
 
 
+def test_adopt_candidate_margin_blocks_near_ties():
+    from src.meta_learning.tuner import adopt_candidate
+
+    assert adopt_candidate(0.52, 0.5, margin=0.05) is False  # not enough improvement
+    assert adopt_candidate(0.60, 0.5, margin=0.05) is True   # clear improvement
+
+
 def test_validate_params_on_one_fold():
     from src.backtesting.strategies.mean_reversion import MR_DEFAULTS
     from src.meta_learning.tuner import validate_params
