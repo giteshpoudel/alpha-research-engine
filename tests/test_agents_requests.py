@@ -5,7 +5,7 @@ from src.ingestion.schemas import database_name, get_clickhouse_client
 
 
 @pytest.fixture
-def ch():
+def ch(change_log_guard):
     c = get_clickhouse_client()
     yield c
     c.command(f"ALTER TABLE {database_name()}.agent_requests DELETE "

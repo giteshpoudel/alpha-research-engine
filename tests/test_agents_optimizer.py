@@ -37,7 +37,7 @@ def test_validate_params():
 
 
 @pytest.fixture
-def ch():
+def ch(change_log_guard):
     c = get_clickhouse_client()
     yield c
     c.command(f"ALTER TABLE {database_name()}.strategy_proposals DELETE "

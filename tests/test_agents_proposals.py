@@ -10,7 +10,7 @@ CHANGE = {"strategy": "TEST_prop", "symbol": "BTC",
 
 
 @pytest.fixture
-def ch():
+def ch(change_log_guard):
     c = get_clickhouse_client()
     yield c
     c.command(
