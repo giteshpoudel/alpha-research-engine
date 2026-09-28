@@ -6,3 +6,13 @@ data/
 __pycache__/
 .pytest_cache/
 
+# Live trading — MUST NOT be pushed to this public repo (research only).
+# Keep live-trading code/config/keys here and they stay untracked.
+src/live/
+src/live_trading/
+config/*live*
+docs/live*
+keys/
+*.pem
+.env.live
+
