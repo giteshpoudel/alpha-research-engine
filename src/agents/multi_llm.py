@@ -84,7 +84,7 @@ def _deepseek() -> _Endpoint | None:
         return None
     return _Endpoint("deepseek",
                      os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-                     key, os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"))
+                     key, os.environ.get("DEEPSEEK_MODEL", "deepseek-flash"))
 
 
 def _ollama() -> _Endpoint:
