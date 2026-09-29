@@ -33,7 +33,7 @@ def test_create_pending_and_list(ch):
 def test_evaluate_adopts_better_and_publishes(ch, monkeypatch):
     incumbent = {"window": 48, "z_entry": -3.0, "z_exit": 0.0}
     monkeypatch.setattr(proposals, "get_tuned_params", lambda *a, **k: incumbent)
-    monkeypatch.setattr(proposals, "walk_forward_folds", lambda *a, **k: [1, 2, 3])
+    monkeypatch.setattr(proposals, "folds_for", lambda *a, **k: [1, 2, 3])
     monkeypatch.setattr(
         proposals, "validate_params",
         lambda ch_, s, sym, params, folds: 0.5 if params == CHANGE["params"] else 0.1)
@@ -51,7 +51,7 @@ def test_evaluate_adopts_better_and_publishes(ch, monkeypatch):
 def test_evaluate_rejects_worse(ch, monkeypatch):
     incumbent = {"window": 48, "z_entry": -3.0, "z_exit": 0.0}
     monkeypatch.setattr(proposals, "get_tuned_params", lambda *a, **k: incumbent)
-    monkeypatch.setattr(proposals, "walk_forward_folds", lambda *a, **k: [1])
+    monkeypatch.setattr(proposals, "folds_for", lambda *a, **k: [1])
     monkeypatch.setattr(
         proposals, "validate_params",
         lambda ch_, s, sym, params, folds: 0.1 if params == CHANGE["params"] else 0.5)
@@ -77,7 +77,7 @@ def _cleanup_id(ch, pid):
 
 
 def test_evaluate_strategy_switch_adopts(ch, monkeypatch):
-    monkeypatch.setattr(proposals, "walk_forward_folds", lambda *a, **k: [1])
+    monkeypatch.setattr(proposals, "folds_for", lambda *a, **k: [1])
     monkeypatch.setattr(
         proposals, "validate_params",
         lambda ch_, strat, sym, params, folds: 0.9 if strat == "momentum" else 0.1)
@@ -98,7 +98,7 @@ def test_evaluate_strategy_switch_adopts(ch, monkeypatch):
 
 
 def test_evaluate_strategy_switch_rejects_worse(ch, monkeypatch):
-    monkeypatch.setattr(proposals, "walk_forward_folds", lambda *a, **k: [1])
+    monkeypatch.setattr(proposals, "folds_for", lambda *a, **k: [1])
     monkeypatch.setattr(
         proposals, "validate_params",
         lambda ch_, strat, sym, params, folds: 0.1 if strat == "momentum" else 0.9)

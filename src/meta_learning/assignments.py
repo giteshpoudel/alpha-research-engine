@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from src.backtesting.strategies.registry import STRATEGY_NAMES
+from src.backtesting.strategies.registry import STRATEGY_NAMES, base_name
 from src.ingestion.schemas import database_name
 from src.ingestion.universe import universe
 
@@ -87,7 +87,7 @@ def assigned_strategy(ch, symbol: str) -> str:
 
 
 def set_assignment(ch, symbol: str, strategy: str) -> None:
-    if strategy not in STRATEGY_NAMES:
+    if base_name(strategy) not in STRATEGY_NAMES:
         raise ValueError(f"unknown strategy {strategy!r}; expected {STRATEGY_NAMES}")
     _write(ch, symbol, strategy)
 

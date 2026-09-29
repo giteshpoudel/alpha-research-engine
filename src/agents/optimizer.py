@@ -91,11 +91,13 @@ def _observe(ch) -> dict:
     from src.backtesting.strategies.registry import STRATEGY_NAMES
     from src.meta_learning.assignments import list_assignments
 
+    # Offer both the 1h base strategies and their 5m intraday variants.
+    strategies = list(STRATEGY_NAMES) + [f"{s}@5m" for s in STRATEGY_NAMES]
     return {
         "paper": tools.invoke("paper_summary", {}, ch=ch).data,
         "health": tools.invoke("system_health", {}, ch=ch).data,
         "symbols": tools.invoke("classify_universe", {}, ch=ch).data,
-        "strategies": list(STRATEGY_NAMES),
+        "strategies": strategies,
         "assignments": list_assignments(ch),
     }
 
@@ -231,9 +233,9 @@ def _execute_plan(plan: dict | None, ch, run, strategy: str, publish_adopted: bo
                  {"action": "request"})
         return {"action": "request", "request_id": request_id}
     if plan.get("action") == "switch_strategy":
-        from src.backtesting.strategies.registry import STRATEGY_NAMES
+        from src.backtesting.strategies.registry import STRATEGY_NAMES, base_name
         symbol, strategy = plan.get("symbol"), plan.get("strategy")
-        if symbol and strategy in STRATEGY_NAMES:
+        if symbol and base_name(strategy) in STRATEGY_NAMES:
             change = {"strategy": strategy, "symbol": symbol,
                       "params": plan.get("params") or {}}
             proposal_id = proposals.create_proposal(

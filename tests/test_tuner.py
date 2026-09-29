@@ -92,6 +92,21 @@ def test_load_train_data_is_cached():
     assert first is second  # cache hit avoids a second ClickHouse query
 
 
+def test_intraday_folds_and_data():
+    from src.meta_learning.tuner import _DATA_CACHE, _load_train_data, folds_for
+
+    folds = folds_for("mean_reversion@5m")
+    assert folds
+    assert folds[0][0] >= datetime(2025, 6, 1, tzinfo=timezone.utc)  # intraday IS window
+
+    ch = get_clickhouse_client()
+    _DATA_CACHE.clear()
+    data = _load_train_data(ch, "mean_reversion@5m", "DOGE",
+                            datetime(2025, 7, 1, tzinfo=timezone.utc),
+                            datetime(2025, 7, 2, tzinfo=timezone.utc))
+    assert len(data) > 0  # 5m DOGE data loads
+
+
 def test_fit_grid_returns_a_grid_point():
     from src.backtesting.strategies.registry import GRIDS
     from src.meta_learning.tuner import fit_grid

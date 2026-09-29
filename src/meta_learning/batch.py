@@ -124,16 +124,20 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Parallel batch tuning (strategy x symbol)")
     parser.add_argument("--trials", type=int, default=30)
     parser.add_argument("--method", choices=["optuna", "grid"], default="optuna")
+    parser.add_argument("--interval", default="1h",
+                        help="bar interval; non-1h namespaces the strategy (e.g. name@5m)")
     parser.add_argument("--workers", type=int, default=None)
     parser.add_argument("--symbols", default="all")
     parser.add_argument("--strategies", default="all")
     args = parser.parse_args(argv)
 
+    from src.backtesting.strategies.registry import qualify
+
     ch = get_clickhouse_client()
     symbols = universe(ch) if args.symbols == "all" else tuple(args.symbols.split(","))
     strategies = (STRATEGY_NAMES if args.strategies == "all"
                   else tuple(args.strategies.split(",")))
-    combos = [(s, sym) for s in strategies for sym in symbols]
+    combos = [(qualify(s, args.interval), sym) for s in strategies for sym in symbols]
     print(f"batch: {len(combos)} combos x {args.trials} trials "
           f"(workers={args.workers or min(8, max(1, (os.cpu_count() or 2) - 1))})")
     result = run_batch(ch, combos=combos, n_trials=args.trials, workers=args.workers,

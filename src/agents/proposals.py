@@ -22,9 +22,9 @@ from src.meta_learning.params import get_tuned_params
 from src.meta_learning.tuner import (
     DEFAULT_ADOPT_MARGIN,
     adopt_candidate,
+    folds_for,
     publish,
     validate_params,
-    walk_forward_folds,
 )
 
 _COLUMNS = ("proposal_id", "run_id", "kind", "symbol", "hypothesis",
@@ -109,11 +109,11 @@ def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
     if row is None:
         raise ValueError(f"unknown proposal {proposal_id}")
     change = json.loads(row["proposed_change"])
-    folds = walk_forward_folds()
     baseline = None
 
     if row["kind"] == "params":
         strategy, symbol, params = change["strategy"], change["symbol"], change["params"]
+        folds = folds_for(strategy)
         candidate_val = validate_params(ch, strategy, symbol, params, folds)
         baseline = get_tuned_params(ch, strategy, symbol)
         incumbent_val = (validate_params(ch, strategy, symbol, baseline, folds)
@@ -130,22 +130,28 @@ def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
     elif row["kind"] == "strategy":
         candidate, symbol = change["strategy"], change["symbol"]
         candidate_params = change.get("params") or registry.defaults(candidate)
-        candidate_val = validate_params(ch, candidate, symbol, candidate_params, folds)
+        candidate_folds = folds_for(candidate)
+        candidate_val = validate_params(ch, candidate, symbol, candidate_params,
+                                        candidate_folds)
         incumbent_strategy = assigned_strategy(ch, symbol)
         incumbent_params = (get_tuned_params(ch, incumbent_strategy, symbol)
                             or registry.defaults(incumbent_strategy))
-        incumbent_val = validate_params(ch, incumbent_strategy, symbol, incumbent_params, folds)
+        # Cross-interval switches compare each strategy on its own appropriate
+        # folds (annualized Sharpe is the common scale); documented approximation.
+        incumbent_val = validate_params(ch, incumbent_strategy, symbol, incumbent_params,
+                                        folds_for(incumbent_strategy))
         baseline = {"strategy": incumbent_strategy, "params": incumbent_params}
         adopted = candidate == incumbent_strategy or (
             candidate_val is not None and adopt_candidate(
                 candidate_val, incumbent_val, margin=DEFAULT_ADOPT_MARGIN))
         if adopted and publish_adopted and candidate_val is not None:
-            publish(ch, candidate, symbol, _record(candidate_params, candidate_val, len(folds)),
+            publish(ch, candidate, symbol,
+                    _record(candidate_params, candidate_val, len(candidate_folds)),
                     datetime.now(timezone.utc))
             set_assignment(ch, symbol, candidate)
         evidence = {"candidate_strategy": candidate, "candidate_val": candidate_val,
                     "incumbent_strategy": incumbent_strategy, "incumbent_val": incumbent_val,
-                    "folds": len(folds)}
+                    "folds": len(candidate_folds)}
         reason = f"{candidate} {candidate_val} vs {incumbent_strategy} {incumbent_val}"
 
     else:

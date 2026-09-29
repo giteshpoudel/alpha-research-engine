@@ -89,6 +89,17 @@ def test_registry_names_and_defaults():
     assert BUILTINS <= set(registry.SEARCH_SPACES)
 
 
+def test_interval_namespacing():
+    from src.backtesting.strategies import registry
+
+    assert registry.normalize("mean_reversion@5m") == ("mean_reversion", "5m")
+    assert registry.normalize("TEST_mean_reversion@5m") == ("mean_reversion", "5m")
+    assert registry.interval_of("momentum") == "1h"
+    assert registry.base_name("rsi_reversion@5m") == "rsi_reversion"
+    assert registry.qualify("breakout", "5m") == "breakout@5m"
+    assert registry.qualify("breakout", "1h") == "breakout"
+
+
 def test_registry_has_grids():
     from src.backtesting.strategies import registry
 

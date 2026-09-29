@@ -56,6 +56,14 @@ def test_step_forward_is_idempotent(ch_client):
     assert runner.step_forward(ch_client, STRATEGY, "ETH") == 0
 
 
+def test_interval_helpers():
+    from datetime import timedelta
+    from src.paper import runner
+
+    assert runner._step_delta("5m") == timedelta(minutes=5)
+    assert runner._step_delta("1h") == timedelta(hours=1)
+
+
 def test_strategy_for_uses_assignment(ch_client):
     from src.meta_learning.assignments import ensure_assignments
 

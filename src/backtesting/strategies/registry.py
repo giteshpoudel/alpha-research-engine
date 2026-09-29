@@ -90,15 +90,40 @@ STRATEGY_NAMES: list[str] = list(SIGNAL_FUNCS)
 
 
 def grid(strategy: str) -> list[dict]:
-    return GRIDS.get(strategy, [])
+    return GRIDS.get(base_name(strategy), [])
+
+
+# --- interval namespacing: "mean_reversion@5m" -> ("mean_reversion", "5m") ---
+DEFAULT_INTERVAL = "1h"
+
+
+def normalize(strategy: str) -> tuple[str, str]:
+    """(base strategy, interval), stripping a TEST_ prefix and @interval suffix."""
+    name = strategy.removeprefix("TEST_")
+    if "@" in name:
+        base, interval = name.split("@", 1)
+        return base, interval
+    return name, DEFAULT_INTERVAL
+
+
+def base_name(strategy: str) -> str:
+    return normalize(strategy)[0]
+
+
+def interval_of(strategy: str) -> str:
+    return normalize(strategy)[1]
+
+
+def qualify(base: str, interval: str) -> str:
+    return base if interval == DEFAULT_INTERVAL else f"{base}@{interval}"
 
 
 def defaults(strategy: str) -> dict:
-    return dict(SIGNAL_FUNCS[strategy][1])
+    return dict(SIGNAL_FUNCS[base_name(strategy)][1])
 
 
 def signals(strategy: str, close, params: dict):
-    fn = SIGNAL_FUNCS[strategy][0]
+    fn = SIGNAL_FUNCS[base_name(strategy)][0]
     return fn(close, **params)
 
 

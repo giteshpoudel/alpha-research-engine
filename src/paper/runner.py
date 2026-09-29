@@ -30,9 +30,19 @@ from src.paper import store
 from src.paper.executor import SleeveState, step
 
 STRATEGY = "assigned"  # resolve each symbol's strategy from its assignment
-INTERVAL = "1h"
-LOOKBACK_BARS = 200  # indicator warmup only; never used as trading history
+INTERVAL = "1h"        # default; actual interval comes from the strategy name
+LOOKBACK_BARS = 200    # indicator warmup only; never used as trading history
 TRAILING_DAYS = 30
+_INTERVAL_DELTA = {"5m": timedelta(minutes=5), "1h": timedelta(hours=1),
+                   "1d": timedelta(days=1)}
+
+
+def _interval_for(client, strategy: str, symbol: str) -> str:
+    return registry.interval_of(_strategy_for(client, strategy, symbol))
+
+
+def _step_delta(interval: str) -> timedelta:
+    return _INTERVAL_DELTA.get(interval, timedelta(hours=1))
 
 
 def _strategy_for(client, requested: str, symbol: str) -> str:
@@ -40,8 +50,8 @@ def _strategy_for(client, requested: str, symbol: str) -> str:
 
 
 def _base_strategy(strategy: str) -> str:
-    """Strip a TEST_ prefix so isolation names still dispatch to a real strategy."""
-    return strategy.removeprefix("TEST_")
+    """Strip TEST_ and @interval so the name dispatches to a real strategy."""
+    return registry.base_name(strategy)
 
 
 def resolve_params(client, strategy: str, symbol: str,
@@ -112,10 +122,11 @@ def _run_range(client, strategy: str, symbol: str, fee: float,
     if process_from > upper:
         return state, 0
 
-    load_start = process_from - timedelta(hours=LOOKBACK_BARS)
+    interval = registry.interval_of(strategy)
+    load_start = process_from - LOOKBACK_BARS * _step_delta(interval)
     try:
-        prices = load_ohlcv(client, symbol, interval=INTERVAL,
-                            start=load_start, end=upper + timedelta(hours=1))["close"]
+        prices = load_ohlcv(client, symbol, interval=interval,
+                            start=load_start, end=upper + _step_delta(interval))["close"]
     except ValueError:
         return state, 0
     entries, exits = _signal_series(client, strategy, symbol, prices)
@@ -154,44 +165,52 @@ def _run_range(client, strategy: str, symbol: str, fee: float,
 def replay(client, strategy: str, symbol: str, start: datetime,
            end: datetime | None = None, fee: float = DEFAULT_FEE) -> int:
     """Deterministically rebuild one sleeve from ``start`` (starts flat at $1)."""
-    latest = store.latest_closed_bar_ts(client, symbol, INTERVAL)
+    latest = store.latest_closed_bar_ts(client, symbol, registry.interval_of(strategy))
     return _run_range(client, strategy, symbol, fee, start, latest, end=end,
                       initial_state=SleeveState(), use_history=False)[1]
 
 
 def step_forward(client, strategy: str, symbol: str, fee: float = DEFAULT_FEE) -> int:
     """Process closed bars after the last recorded bar for one sleeve."""
-    latest = store.latest_closed_bar_ts(client, symbol, INTERVAL)
+    interval = registry.interval_of(strategy)
+    latest = store.latest_closed_bar_ts(client, symbol, interval)
     if latest is None:
         return 0
     last = store.last_paper_ts(client, strategy, symbol)
     if last is None:
         process_from, initial = WINDOWS["OOS"][0], SleeveState()
     else:
-        process_from, initial = last + timedelta(hours=1), store.load_state(client, strategy, symbol)
+        process_from, initial = (last + _step_delta(interval),
+                                 store.load_state(client, strategy, symbol))
     if process_from > latest:
         return 0
     return _run_range(client, strategy, symbol, fee, process_from, latest,
                       initial_state=initial, use_history=True)[1]
 
 
-def _topup(client, symbols: tuple[str, ...]) -> None:
-    """Incrementally refresh the latest 1h OHLCV bars before stepping."""
-    from src.ingestion.binance_us import backfill_ohlcv
-    from src.ingestion.coinbase import backfill_matic
+def _topup(client, symbols: tuple[str, ...], intervals: tuple[str, ...] = ("1h",)) -> None:
+    """Incrementally refresh the latest OHLCV bars before stepping."""
+    from src.ingestion.binance_us import BINANCE_US_SYMBOLS, backfill_ohlcv
+    from src.ingestion.coinbase import backfill_coinbase, backfill_matic
 
     start = datetime.now(timezone.utc) - timedelta(days=3)
-    binance = tuple(s for s in symbols if s != "MATIC")
+    binance = tuple(s for s in symbols if s != "MATIC" and s in BINANCE_US_SYMBOLS)
     if binance:
         try:
-            backfill_ohlcv(client, symbols=binance, intervals=("1h",), start=start)
+            backfill_ohlcv(client, symbols=binance, intervals=intervals, start=start)
         except Exception as exc:
             print(f"paper: price top-up failed (binance_us): {exc}")
-    if "MATIC" in symbols:
+    coinbase_only = tuple(s for s in symbols if s != "MATIC" and s not in BINANCE_US_SYMBOLS)
+    if coinbase_only:
         try:
-            backfill_matic(client, intervals=("1h",), start=start)
+            backfill_coinbase(client, symbols=coinbase_only, intervals=intervals, start=start)
         except Exception as exc:
             print(f"paper: price top-up failed (coinbase): {exc}")
+    if "MATIC" in symbols:
+        try:
+            backfill_matic(client, intervals=intervals, start=start)
+        except Exception as exc:
+            print(f"paper: price top-up failed (coinbase/matic): {exc}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -225,7 +244,9 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if not args.no_topup:
-        _topup(client, symbols)
+        intervals = tuple(sorted({_interval_for(client, args.strategy, s)
+                                  for s in symbols} | {"1h"}))
+        _topup(client, symbols, intervals=intervals)
     for symbol in symbols:
         try:
             strategy = _strategy_for(client, args.strategy, symbol)
