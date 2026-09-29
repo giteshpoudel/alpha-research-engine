@@ -27,7 +27,8 @@ def test_tune_stores_tuned_params():
     ch = get_clickhouse_client()
     try:
         result = tune(ch, "TEST_mean_reversion", "BTC", n_trials=5, seed=42)
-        assert set(result) == {"params", "train_sharpe", "validation_sharpe", "folds"}
+        assert {"params", "train_sharpe", "validation_sharpe", "folds"} <= set(result)
+        assert 0.0 <= result["dsr"] <= 1.0
         assert result["folds"] == 8
         params = result["params"]
         assert 12 <= params["window"] <= 72

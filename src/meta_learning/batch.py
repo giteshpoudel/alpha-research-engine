@@ -47,7 +47,7 @@ def _tune_combo(args: tuple[str, str, int, str]) -> dict:
                          if incumbent else None)
         return {"strategy": strategy, "symbol": symbol, "params": record["params"],
                 "folds": record["folds"], "candidate_val": candidate_val,
-                "incumbent_val": incumbent_val}
+                "incumbent_val": incumbent_val, "dsr": record.get("dsr")}
     except Exception as exc:  # one bad combo (e.g. no data) must not kill the batch
         return {"strategy": strategy, "symbol": symbol, "params": None,
                 "folds": 0, "candidate_val": None, "incumbent_val": None,
@@ -90,11 +90,15 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
     else:
         results = _run_pool()
 
+    min_dsr = float(os.environ.get("MIN_DSR_PROB", "0"))
     adopted = 0
     for res in results:
         if res.get("error") or res["candidate_val"] is None:
             continue
         if not adopt_candidate(res["candidate_val"], res["incumbent_val"], margin=margin):
+            continue
+        # Multiplicity gate: reject best-of-many flukes when enabled.
+        if min_dsr > 0 and res.get("dsr") is not None and res["dsr"] < min_dsr:
             continue
         publish(ch, res["strategy"], res["symbol"],
                 {"params": res["params"], "train_sharpe": 0.0,
@@ -114,7 +118,8 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
             pass
 
     summary = [{"strategy": r["strategy"], "symbol": r["symbol"],
-                "candidate_val": r["candidate_val"], "incumbent_val": r["incumbent_val"]}
+                "candidate_val": r["candidate_val"], "incumbent_val": r["incumbent_val"],
+                "dsr": r.get("dsr")}
                for r in results]
     return {"combos": len(results), "adopted": adopted, "workers": workers,
             "results": summary}
