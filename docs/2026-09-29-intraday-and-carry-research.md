@@ -88,6 +88,33 @@ minus a negligible entry cost; *timing* funding hour-by-hour pays flip costs and
 gives up carry. The real risk of always-in is sustained negative funding, which
 needs a regime guard — not hourly hysteresis.
 
+### 4.1 Regime guard (built)
+
+`run_carry_regime_backtest` / `carry_regime_metrics`: enter when the trailing
+``enter_window`` mean funding > 0, exit only when the slower ``exit_window`` mean
+falls below ``exit_level``. Defaults **72h / 336h / enter 0 / exit −5e-5**. A
+*loose* exit trigger is essential — an exit at 0 churns hundreds of times and
+loses everything.
+
+| symbol | hold APY | guarded APY | maxDD | flips |
+|---|---|---|---|---|
+| BTC | 12.2% | 12.2% | −1.1% | 1 |
+| ETH | 12.2% | 12.3% | −0.4% | 1 |
+| DOGE | 14.4% | 15.4% | −3.1% | 1 |
+| LINK | 13.4% | 13.9% | −3.8% | 1 |
+| LTC | 11.1% | 11.2% | −3.9% | 1 |
+| SOL | 10.7% | 11.2% | −3.4% | 1 |
+| XRP | 8.6% | 9.1% | −3.0% | 1 |
+| DOT | 8.2% | 8.2% | −5.8% | 2 |
+| ADA | 8.1% | 8.1% | −1.9% | 1 |
+| AVAX | 7.5% | 8.8% | −5.6% | 3 |
+| BNB | 3.4% | −2.5% | −26.6% | 83 |
+
+The guard is **near-free tail insurance** for high-funding coins (one entry flip,
+same or better yield). It **hurts low-funding coins** (BNB at 3.4% churns 83
+times): only run the guard when trailing gross funding is attractive (e.g.
+> 5% APY), otherwise hold continuously or skip the symbol.
+
 ## 5. Rigid roadmap (mapped to this repo)
 
 Tier 1:

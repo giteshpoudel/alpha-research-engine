@@ -196,11 +196,42 @@ def run_funding_backtest(funding: pd.Series, threshold: float = 0.0001,
         elif state == 1 and rate < exit_threshold:
             state = 0
         positions.append(state)
-    pos = pd.Series(positions, index=funding.index)
-    positioned = pos.astype(bool)
+    positioned = pd.Series(positions, index=funding.index).astype(bool)
+    return _funding_result(funding, positioned, fee)
+
+
+def run_carry_regime_backtest(funding: pd.Series, enter_window: int = 72,
+                              exit_window: int = 336, enter_level: float = 0.0,
+                              exit_level: float = -5e-5, fee: float = 0.001
+                              ) -> BacktestResult:
+    """Delta-neutral carry with a causal trailing-mean regime guard.
+
+    Enter when the ``enter_window``-bar mean funding exceeds ``enter_level``;
+    exit when the ``exit_window``-bar mean falls below ``exit_level``. Both
+    means are trailing (point-in-time), so no look-ahead. This holds the carry
+    through ordinary noise but steps aside during sustained negative-funding
+    regimes, where holding continuously bleeds. Costs 2*fee per flip.
+    """
+    fast = funding.rolling(enter_window, min_periods=enter_window).mean()
+    slow = funding.rolling(exit_window, min_periods=exit_window).mean()
+    state, positions = 0, []
+    for i in range(len(funding)):
+        f, s = fast.iloc[i], slow.iloc[i]
+        if state == 0 and pd.notna(f) and f > enter_level:
+            state = 1
+        elif state == 1 and pd.notna(s) and s < exit_level:
+            state = 0
+        positions.append(state)
+    positioned = pd.Series(positions, index=funding.index).astype(bool)
+    return _funding_result(funding, positioned, fee)
+
+
+def _funding_result(funding: pd.Series, positioned: pd.Series,
+                    fee: float) -> BacktestResult:
+    """Shared additive-equity bookkeeping for the funding/carry backtests."""
+    pos = positioned.astype(int)
     flips = pos.diff().fillna(pos.iloc[0]).abs()
-    cost = flips * 2.0 * fee
-    pnl = funding.where(positioned, 0.0) - cost
+    pnl = funding.where(positioned, 0.0) - flips * 2.0 * fee
     equity = (1.0 + pnl.cumsum()).rename("equity")
     step = (funding.index[1] - funding.index[0]) if len(funding) > 1 \
         else pd.Timedelta(hours=1)
