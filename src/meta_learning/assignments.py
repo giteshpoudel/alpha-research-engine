@@ -16,11 +16,13 @@ from src.ingestion.universe import universe
 DEFAULT_STRATEGY = "mean_reversion"
 _COLUMNS = ("symbol", "strategy", "valid_from", "updated_at")
 
-# Starting priors by symbol category (the optimizer revises these): meme/penny
-# names get fast momentum/breakout styles; majors get the mean-reversion edge.
+# Starting priors by symbol category (the optimizer revises these). The earlier
+# "alt->momentum / meme->breakout" priors underperformed in paper (momentum was
+# worse-validated AND worse in paper), so we start everyone on the validated
+# mean-reversion edge and let champion/challenger switch symbols that do better.
 CATEGORY_PRIORS = {
-    "meme": "breakout",
-    "alt": "momentum",
+    "meme": "mean_reversion",
+    "alt": "mean_reversion",
     "major": "mean_reversion",
 }
 

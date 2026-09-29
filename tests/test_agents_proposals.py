@@ -26,7 +26,8 @@ def test_create_pending_and_list(ch):
     assert row["decision"] == "pending"
     assert row["hypothesis"] == "try tighter z_entry"
     assert row["model"] == "kimi-k3"
-    assert any(r["proposal_id"] == pid for r in proposals.list_proposals(ch))
+    assert any(r["proposal_id"] == pid
+               for r in proposals.list_proposals(ch, limit=100000))
 
 
 def test_evaluate_adopts_better_and_publishes(ch, monkeypatch):

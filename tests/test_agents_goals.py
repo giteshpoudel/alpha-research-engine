@@ -13,8 +13,9 @@ def ch(change_log_guard):
     c = get_clickhouse_client()
     yield c
     c.command(
-        f"ALTER TABLE {database_name()}.agent_goals DELETE WHERE goal_date = {{d:Date}}",
-        parameters={"d": DAY}, settings={"mutations_sync": 1},
+        f"ALTER TABLE {database_name()}.agent_goals DELETE "
+        "WHERE goal_date >= '2020-01-01' AND goal_date <= '2020-01-31'",
+        settings={"mutations_sync": 1},
     )
 
 
@@ -42,3 +43,20 @@ def test_update_pending_when_below_target(ch):
 def test_daily_profit_pct_runs(ch):
     value = goals.daily_profit_pct(ch)
     assert value is None or isinstance(value, float)
+
+
+def test_raise_once_per_day(ch):
+    goals.ensure_goal(ch, DAY, target=0.1)
+    goals.update_goal(ch, DAY, 0.5)
+    first = goals.raise_goal(ch, DAY, factor=2.0)
+    second = goals.raise_goal(ch, DAY, factor=2.0)
+    assert first["target_profit_pct"] == pytest.approx(0.2)
+    assert second["target_profit_pct"] == pytest.approx(0.2)  # no double raise
+
+
+def test_rolling_target_uses_recent_achieved(ch):
+    yesterday = date(2020, 1, 14)
+    goals.ensure_goal(ch, yesterday, target=0.1)
+    goals.update_goal(ch, yesterday, 4.0)  # achieved +4%
+    row = goals.ensure_goal(ch, DAY)       # new day target = 0.5 * 4.0
+    assert row["target_profit_pct"] == pytest.approx(2.0)

@@ -16,6 +16,8 @@
         <string>86400</string>
         <string>--llm-every</string>
         <string>5</string>
+        <string>--synth-every</string>
+        <string>10</string>
         <string>--tune-trials</string>
         <string>20</string>
     </array>

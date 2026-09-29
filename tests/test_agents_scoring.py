@@ -42,5 +42,5 @@ def test_detect_regression(ch):
               column_names=["run_id", "kind", "score", "flag", "adopted", "proposals",
                             "requests", "tokens_in", "tokens_out", "cost_usd",
                             "duration_ms", "status", "created_at"])
-    regression = scoring.detect_regression(ch, window=10, factor=0.5)
+    regression = scoring.detect_regression(ch, window=10, factor=0.5, prefix="TESTSCORE")
     assert regression is not None and regression["recent"] < regression["older"]

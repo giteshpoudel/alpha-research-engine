@@ -149,11 +149,15 @@ def _tune_iteration(ch, run, strategy: str, symbol: str, n_trials: int,
             "proposal_id": proposal_id, "decision": row["decision"]}
 
 
-def _planner_prompt(observed: dict, state: OptimizerState,
-                    focus: str | None = None) -> tuple[str, str]:
-    user = json.dumps({"goal_profit_pct": state.goal_profit_pct,
-                       "focus_symbol": focus, "observed": observed}, default=str)
-    return _PLANNER_SYSTEM, user
+def _planner_prompt(observed: dict, state: OptimizerState, focus: str | None = None,
+                    prefer_add_strategy: bool = False) -> tuple[str, str]:
+    payload = {"goal_profit_pct": state.goal_profit_pct,
+               "focus_symbol": focus, "observed": observed}
+    if prefer_add_strategy:
+        payload["directive"] = ("This iteration, prioritize action 'add_strategy' if you "
+                                "can justify a genuinely new idea; otherwise propose_params "
+                                "or none.")
+    return _PLANNER_SYSTEM, json.dumps(payload, default=str)
 
 
 def _llm(chat_fn, role: str, system: str, user: str, run, budget: Budget):
@@ -239,7 +243,7 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
                   max_steps: int = 0, planner_model: str = "",
                   executor_model: str = "", goal_pct: float | None = None,
                   day=None, focus_symbol: str | None = None, tune_trials: int = 0,
-                  avoid: set | None = None) -> dict:
+                  avoid: set | None = None, prefer_add_strategy: bool = False) -> dict:
     ch = ch or get_clickhouse_client()
     if chat_fn is None:
         from src.agents.breakers import BreakerStore
@@ -276,7 +280,7 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
         if focus and not focus_strategy:
             focus_strategy = assignments.get(focus, strategy)
 
-        if tune_trials and focus:
+        if tune_trials and focus and not prefer_add_strategy:
             budget.check()
             outcome = _tune_iteration(ch, run, focus_strategy, focus, tune_trials,
                                       publish_adopted)
@@ -289,7 +293,7 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
         else:
             for _ in range(loops):
                 budget.check()
-                system, user = _planner_prompt(observed, state, focus)
+                system, user = _planner_prompt(observed, state, focus, prefer_add_strategy)
                 plan = _extract_json(_llm(chat_fn, "planner", system, user, run, budget).text)
                 if plan:
                     built = _extract_json(
@@ -332,7 +336,7 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
 
 def run_continuous(ch=None, interval: float = 300.0, max_iterations: int = 0,
                    max_runtime_seconds: float = 86400.0, llm_every: int = 5,
-                   tune_trials: int = 20, **kwargs) -> dict:
+                   synth_every: int = 10, tune_trials: int = 20, **kwargs) -> dict:
     """Rapid optimizer loop with a watchdog (bounds runaway loops/deadlocks).
 
     Most iterations are fast deterministic Optuna tuning; every ``llm_every``
@@ -350,16 +354,18 @@ def run_continuous(ch=None, interval: float = 300.0, max_iterations: int = 0,
             break
         if max_runtime_seconds and (time.monotonic() - started) >= max_runtime_seconds:
             break
-        use_llm = bool(llm_every) and iterations % llm_every == 0
+        synth = bool(synth_every) and iterations > 0 and iterations % synth_every == 0
+        use_llm = synth or (bool(llm_every) and iterations % llm_every == 0)
+        mode = "synth" if synth else ("llm" if use_llm else "tune")
         t0 = time.monotonic()
         try:
             result = run_optimizer(ch=ch, loops=1, focus_symbol=None,
                                    tune_trials=0 if use_llm else tune_trials,
-                                   avoid=set(recent), **kwargs)
+                                   avoid=set(recent), prefer_add_strategy=synth, **kwargs)
             proposals_made += len(result.get("proposals", []))
             adopted += result.get("adopted", 0)
             focus = result.get("focus")
-            print(f"optimizer[{iterations}] {'llm' if use_llm else 'tune'} focus={focus} "
+            print(f"optimizer[{iterations}] {mode} focus={focus} "
                   f"proposals={len(result.get('proposals', []))} adopted={result.get('adopted')} "
                   f"({time.monotonic() - t0:.1f}s)")
             if focus:
@@ -398,6 +404,8 @@ def main(argv: list[str] | None = None) -> None:
                         dest="max_runtime")
     parser.add_argument("--llm-every", type=int, default=5, dest="llm_every",
                         help="run the planner LLM every Nth continuous iteration")
+    parser.add_argument("--synth-every", type=int, default=10, dest="synth_every",
+                        help="every Nth iteration, prioritize new-strategy synthesis")
     parser.add_argument("--tune-trials", type=int, default=20, dest="tune_trials",
                         help="Optuna trials per rapid-tune iteration")
     args = parser.parse_args(argv)
@@ -411,6 +419,7 @@ def main(argv: list[str] | None = None) -> None:
         result = run_continuous(
             interval=args.interval, max_iterations=args.max_iterations,
             max_runtime_seconds=args.max_runtime, llm_every=args.llm_every,
+            synth_every=args.synth_every,
             tune_trials=args.tune_trials, strategy=args.strategy,
             publish_adopted=not args.no_publish, max_cost_usd=args.max_cost,
             max_steps=args.max_steps)

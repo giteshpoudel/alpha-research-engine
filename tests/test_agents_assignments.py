@@ -25,8 +25,9 @@ def test_set_assignment_rejects_unknown(ch):
 
 
 def test_category_priors():
-    assert A.default_strategy_for("meme") == "breakout"
-    assert A.default_strategy_for("alt") == "momentum"
+    # Start everyone on the validated edge; the optimizer revises via the gate.
+    assert A.default_strategy_for("meme") == "mean_reversion"
+    assert A.default_strategy_for("alt") == "mean_reversion"
     assert A.default_strategy_for("major") == "mean_reversion"
     assert A.default_strategy_for(None) == "mean_reversion"
 
