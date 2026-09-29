@@ -32,6 +32,11 @@ def fee_mode() -> str:
     return execution_mode()
 
 
+def execution_lag() -> int:
+    """Bars between signal and fill (default 1: signal at close t, fill t+1)."""
+    return int(os.environ.get("EXECUTION_LAG", "1"))
+
+
 def maker_limit_bps() -> float:
     return float(os.environ.get("MAKER_LIMIT_BPS", "5"))
 

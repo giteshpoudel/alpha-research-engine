@@ -131,6 +131,10 @@ def _run(data, strategy: str, params: dict, fee: float,
         entries, exits = lead_lag.signals(close, data["leader_close"], **params)
     else:
         entries, exits = registry.signals(strategy, close, params)
+    lag = fees.execution_lag()
+    if lag:
+        entries = entries.shift(lag, fill_value=False)
+        exits = exits.shift(lag, fill_value=False)
     if fees.execution_mode() == "maker" and hasattr(data, "columns"):
         return run_maker_backtest(data, entries, exits, fee=fee,
                                   limit_bps=fees.maker_limit_bps(),

@@ -36,6 +36,13 @@ def test_execution_mode_defaults_taker(monkeypatch):
     assert fees.fee_for_exchange("binance_us") == 0.0  # maker side
 
 
+def test_execution_lag_default_and_env(monkeypatch):
+    monkeypatch.delenv("EXECUTION_LAG", raising=False)
+    assert fees.execution_lag() == 1
+    monkeypatch.setenv("EXECUTION_LAG", "0")
+    assert fees.execution_lag() == 0
+
+
 def test_maker_params_env(monkeypatch):
     monkeypatch.setenv("MAKER_LIMIT_BPS", "3")
     monkeypatch.setenv("MAKER_MAX_WAIT", "2")

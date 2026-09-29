@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
+from src.backtesting import fees
 from src.backtesting.data import WINDOWS, load_ohlcv
 from src.backtesting.fees import fee_for_symbol
 from src.backtesting.runner import DEFAULT_FEE
@@ -135,6 +136,10 @@ def _run_range(client, strategy: str, symbol: str, fee: float,
     except ValueError:
         return state, 0
     entries, exits = _signal_series(client, strategy, symbol, prices)
+    lag = fees.execution_lag()
+    if lag:
+        entries = entries.shift(lag, fill_value=False)
+        exits = exits.shift(lag, fill_value=False)
 
     equity_series: list[tuple[datetime, float]] = (
         store.load_recent_equity(client, strategy, symbol, process_from) if use_history else [])
