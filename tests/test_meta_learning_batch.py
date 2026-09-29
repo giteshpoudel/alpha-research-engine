@@ -14,7 +14,7 @@ def ch(change_log_guard):
 
 def test_run_batch_single_combo(ch):
     result = batch.run_batch(ch, combos=[("TEST_mean_reversion", "BTC")],
-                             n_trials=3, workers=1)
+                             n_trials=3, workers=1, use_lock=False, prune=False)
     assert result["combos"] == 1
     assert result["workers"] == 1
     assert result["results"][0]["strategy"] == "TEST_mean_reversion"

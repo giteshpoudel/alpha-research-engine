@@ -18,6 +18,10 @@
         <string>5</string>
         <string>--synth-every</string>
         <string>10</string>
+        <string>--synth-count</string>
+        <string>2</string>
+        <string>--round-size</string>
+        <string>6</string>
         <string>--tune-trials</string>
         <string>20</string>
     </array>

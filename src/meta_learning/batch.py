@@ -47,16 +47,39 @@ def _tune_combo(args: tuple[str, str, int]) -> dict:
 
 
 def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 30,
-              workers: int | None = None, margin: float = DEFAULT_ADOPT_MARGIN) -> dict:
+              workers: int | None = None, margin: float = DEFAULT_ADOPT_MARGIN,
+              use_lock: bool = True, prune: bool = True) -> dict:
+    from src.agents import governor
+    from src.meta_learning import performance
+
     if combos is None:
         symbols = universe(ch)
         combos = [(s, sym) for s in STRATEGY_NAMES for sym in symbols]
+
+    # Skip combos already known dead.
+    try:
+        dead = performance.dead_combos(ch)
+        combos = [c for c in combos if c not in dead]
+    except Exception:
+        pass
+
     workers = workers or min(8, max(1, (os.cpu_count() or 2) - 1))
 
-    results: list[dict] = []
-    with ProcessPoolExecutor(max_workers=workers) as pool:
-        for result in pool.map(_tune_combo, [(s, sym, n_trials) for s, sym in combos]):
-            results.append(result)
+    def _run_pool() -> list[dict]:
+        out: list[dict] = []
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            for result in pool.map(_tune_combo, [(s, sym, n_trials) for s, sym in combos]):
+                out.append(result)
+        return out
+
+    if use_lock:
+        with governor.heavy("batch") as acquired:
+            if not acquired:
+                return {"combos": 0, "adopted": 0, "workers": workers,
+                        "skipped": "compute lock busy", "results": []}
+            results = _run_pool()
+    else:
+        results = _run_pool()
 
     adopted = 0
     for res in results:
@@ -73,6 +96,13 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
                            "candidate_val": res["candidate_val"],
                            "incumbent_val": res["incumbent_val"], "source": "batch"})
         adopted += 1
+
+    if prune:
+        try:
+            performance.refresh(ch)
+            performance.prune_generated(ch)
+        except Exception:
+            pass
 
     summary = [{"strategy": r["strategy"], "symbol": r["symbol"],
                 "candidate_val": r["candidate_val"], "incumbent_val": r["incumbent_val"]}

@@ -108,8 +108,12 @@ def _validation_by_symbol(ch) -> dict[tuple[str, str], float]:
     return {(symbol, strategy): float(v) for symbol, strategy, v in rows}
 
 
-def _focus_symbol(ch, observed: dict, avoid: set | None = None) -> tuple[str | None, str | None]:
-    """Neediest symbol first: halted sleeve, then missing params, then lowest validation."""
+def _priority_pairs(ch, observed: dict,
+                    avoid: set | None = None) -> list[tuple[str, str]]:
+    """(symbol, assigned strategy) most-needy first; ``avoid`` moved to the back.
+
+    Neediness: halted sleeve < missing params < lowest validation Sharpe.
+    """
     assignments = observed.get("assignments") or {}
     paper = {s["symbol"]: s for s in (observed.get("paper") or {}).get("sleeves", [])}
     valuation = _validation_by_symbol(ch)
@@ -121,10 +125,31 @@ def _focus_symbol(ch, observed: dict, avoid: set | None = None) -> tuple[str | N
         scored.append((score, symbol, strategy))
     scored.sort(key=lambda t: (t[0], t[1]))
     avoid = avoid or set()
-    for score, symbol, strategy in scored:
-        if symbol not in avoid:
-            return symbol, strategy
-    return (scored[0][1], scored[0][2]) if scored else (None, None)
+    return ([(s, st) for _, s, st in scored if s not in avoid]
+            + [(s, st) for _, s, st in scored if s in avoid])
+
+
+def _focus_symbol(ch, observed: dict, avoid: set | None = None) -> tuple[str | None, str | None]:
+    pairs = _priority_pairs(ch, observed, avoid)
+    return pairs[0] if pairs else (None, None)
+
+
+def run_parallel_round(ch=None, round_size: int = 6, n_trials: int = 20,
+                       workers: int | None = None) -> dict:
+    """Tune the neediest ``round_size`` symbols in parallel (all cores)."""
+    from src.agents import governor
+    from src.meta_learning import batch as batch_mod
+
+    ch = ch or get_clickhouse_client()
+    observed = _observe(ch)
+    pairs = _priority_pairs(ch, observed)[:round_size]
+    combos = [(strategy, symbol) for symbol, strategy in pairs]
+    if not combos:
+        return {"combos": 0, "adopted": 0}
+    with governor.heavy("optimizer_round") as acquired:
+        if not acquired:
+            return {"combos": 0, "adopted": 0, "skipped": "compute lock busy"}
+        return batch_mod.run_batch(ch, combos=combos, n_trials=n_trials, workers=workers)
 
 
 def _tune_iteration(ch, run, strategy: str, symbol: str, n_trials: int,
@@ -336,13 +361,14 @@ def run_optimizer(ch=None, loops: int = 1, strategy: str = "mean_reversion",
 
 def run_continuous(ch=None, interval: float = 300.0, max_iterations: int = 0,
                    max_runtime_seconds: float = 86400.0, llm_every: int = 5,
-                   synth_every: int = 10, tune_trials: int = 20, **kwargs) -> dict:
+                   synth_every: int = 10, synth_count: int = 2, round_size: int = 6,
+                   tune_trials: int = 20, **kwargs) -> dict:
     """Rapid optimizer loop with a watchdog (bounds runaway loops/deadlocks).
 
-    Most iterations are fast deterministic Optuna tuning; every ``llm_every``
-    iterations the planner LLM runs for bigger-picture actions (switch/request).
-    Exits after ``max_iterations`` or ``max_runtime_seconds`` (launchd restarts
-    it fresh), so a stuck process can't spin forever.
+    Non-LLM iterations tune a *batch* of needy symbols in parallel (all cores);
+    every ``synth_every`` iterations it synthesizes new strategies; every
+    ``llm_every`` the planner LLM runs for switch/request actions. Exits after
+    ``max_iterations`` or ``max_runtime_seconds`` (launchd restarts it fresh).
     """
     # Do NOT create the client here: a transient DB outage at startup would
     # crash the worker. It is created (and any failure caught) per iteration.
@@ -356,19 +382,37 @@ def run_continuous(ch=None, interval: float = 300.0, max_iterations: int = 0,
             break
         synth = bool(synth_every) and iterations > 0 and iterations % synth_every == 0
         use_llm = synth or (bool(llm_every) and iterations % llm_every == 0)
-        mode = "synth" if synth else ("llm" if use_llm else "tune")
+        mode = "synth" if synth else ("llm" if use_llm else
+                                      ("round" if round_size > 1 else "tune"))
         t0 = time.monotonic()
         try:
-            result = run_optimizer(ch=ch, loops=1, focus_symbol=None,
-                                   tune_trials=0 if use_llm else tune_trials,
-                                   avoid=set(recent), prefer_add_strategy=synth, **kwargs)
-            proposals_made += len(result.get("proposals", []))
-            adopted += result.get("adopted", 0)
-            focus = result.get("focus")
+            client = ch or get_clickhouse_client()
+            if synth:
+                from src.agents.strategy_synth import synthesize_batch
+                names = synthesize_batch(client, synth_count, chat_fn=kwargs.get("chat_fn"))
+                print(f"optimizer[{iterations}] synth registered={names}")
+            if use_llm:
+                result = run_optimizer(ch=client, loops=1, focus_symbol=None, tune_trials=0,
+                                       avoid=set(recent), prefer_add_strategy=synth, **kwargs)
+                proposals_made += len(result.get("proposals", []))
+                adopted += result.get("adopted", 0)
+                focus = result.get("focus")
+            elif round_size > 1:
+                rres = run_parallel_round(ch=client, round_size=round_size,
+                                          n_trials=tune_trials)
+                proposals_made += rres.get("combos", 0)
+                adopted += rres.get("adopted", 0)
+                focus = rres.get("skipped") or f"round({rres.get('combos', 0)})"
+            else:
+                result = run_optimizer(ch=client, loops=1, focus_symbol=None,
+                                       tune_trials=tune_trials, avoid=set(recent), **kwargs)
+                proposals_made += len(result.get("proposals", []))
+                adopted += result.get("adopted", 0)
+                focus = result.get("focus")
             print(f"optimizer[{iterations}] {mode} focus={focus} "
-                  f"proposals={len(result.get('proposals', []))} adopted={result.get('adopted')} "
+                  f"(total proposals={proposals_made} adopted={adopted}) "
                   f"({time.monotonic() - t0:.1f}s)")
-            if focus:
+            if isinstance(focus, str) and focus and not focus.startswith("round"):
                 recent = (recent + [focus])[-5:]
         except Exception as exc:
             print(f"optimizer[{iterations}] iteration failed: {exc}")
@@ -406,6 +450,10 @@ def main(argv: list[str] | None = None) -> None:
                         help="run the planner LLM every Nth continuous iteration")
     parser.add_argument("--synth-every", type=int, default=10, dest="synth_every",
                         help="every Nth iteration, prioritize new-strategy synthesis")
+    parser.add_argument("--synth-count", type=int, default=2, dest="synth_count",
+                        help="candidate strategies to generate per synth iteration")
+    parser.add_argument("--round-size", type=int, default=6, dest="round_size",
+                        help="symbols tuned in parallel per non-LLM round")
     parser.add_argument("--tune-trials", type=int, default=20, dest="tune_trials",
                         help="Optuna trials per rapid-tune iteration")
     args = parser.parse_args(argv)
@@ -419,7 +467,8 @@ def main(argv: list[str] | None = None) -> None:
         result = run_continuous(
             interval=args.interval, max_iterations=args.max_iterations,
             max_runtime_seconds=args.max_runtime, llm_every=args.llm_every,
-            synth_every=args.synth_every,
+            synth_every=args.synth_every, synth_count=args.synth_count,
+            round_size=args.round_size,
             tune_trials=args.tune_trials, strategy=args.strategy,
             publish_adopted=not args.no_publish, max_cost_usd=args.max_cost,
             max_steps=args.max_steps)

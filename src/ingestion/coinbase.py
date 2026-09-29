@@ -18,7 +18,7 @@ from src.ingestion.tickers import TICKER_ALIASES
 
 MATIC_MIGRATION = datetime(2024, 9, 4, tzinfo=timezone.utc)
 
-_INTERVAL_SECONDS = {"1h": 3600, "1d": 86400}
+_INTERVAL_SECONDS = {"5m": 300, "1h": 3600, "1d": 86400}
 _MAX_CANDLES = 300  # Coinbase per-request cap
 
 

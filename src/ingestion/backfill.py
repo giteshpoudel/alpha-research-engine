@@ -55,8 +55,9 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Backfill OHLCV + funding-rate history")
     parser.add_argument("--symbols", nargs="+", metavar="TICKER", default=None,
                         help="restrict to these tickers (default: all 12)")
-    parser.add_argument("--intervals", nargs="+", choices=["1h", "1d"], default=["1h", "1d"],
-                        help="ohlcv intervals (default: 1h 1d)")
+    parser.add_argument("--intervals", nargs="+", choices=["5m", "1h", "1d"],
+                        default=["1h", "1d"],
+                        help="ohlcv intervals (default: 1h 1d; add 5m for intraday)")
     parser.add_argument("--start", default="2022-01-01", metavar="YYYY-MM-DD",
                         help="floor date for fresh series (default 2022-01-01)")
     args = parser.parse_args(argv)

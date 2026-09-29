@@ -59,10 +59,25 @@ def walk_forward_folds(is_start: datetime = _IS_START,
     return folds
 
 
+# Per-process cache of price/funding series keyed by exact window, so batch
+# workers tuning many strategies for one symbol don't re-query the same folds.
+_DATA_CACHE: dict = {}
+_CACHE_MAX = 512
+
+
 def _load_train_data(ch_client, strategy: str, symbol: str, start: datetime, end: datetime):
+    key = (strategy, symbol, start, end)
+    cached = _DATA_CACHE.get(key)
+    if cached is not None:
+        return cached
     if strategy == "funding_arb":
-        return load_funding(ch_client, symbol, start=start, end=end)
-    return load_ohlcv(ch_client, symbol, start=start, end=end)["close"]
+        data = load_funding(ch_client, symbol, start=start, end=end)
+    else:
+        data = load_ohlcv(ch_client, symbol, start=start, end=end)["close"]
+    if len(_DATA_CACHE) >= _CACHE_MAX:
+        _DATA_CACHE.clear()
+    _DATA_CACHE[key] = data
+    return data
 
 
 def _run(data, strategy: str, params: dict, fee: float):

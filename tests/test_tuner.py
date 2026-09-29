@@ -80,6 +80,18 @@ def test_adopt_candidate_margin_blocks_near_ties():
     assert adopt_candidate(0.60, 0.5, margin=0.05) is True   # clear improvement
 
 
+def test_load_train_data_is_cached():
+    from src.meta_learning.tuner import _DATA_CACHE, _load_train_data
+
+    ch_client = get_clickhouse_client()
+    _DATA_CACHE.clear()
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end = datetime(2024, 2, 1, tzinfo=timezone.utc)
+    first = _load_train_data(ch_client, "mean_reversion", "BTC", start, end)
+    second = _load_train_data(ch_client, "mean_reversion", "BTC", start, end)
+    assert first is second  # cache hit avoids a second ClickHouse query
+
+
 def test_validate_params_on_one_fold():
     from src.backtesting.strategies.mean_reversion import MR_DEFAULTS
     from src.meta_learning.tuner import validate_params

@@ -521,6 +521,22 @@ ORDER BY (run_id)
 """
 
 
+# Per (strategy, symbol) performance, used to prune dead candidates.
+_STRATEGY_PERFORMANCE_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.strategy_performance
+(
+    strategy LowCardinality(String),
+    symbol String,
+    validation_sharpe Float32,
+    paper_return Float32,
+    status LowCardinality(String),
+    updated_at DateTime64(3)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (strategy, symbol)
+"""
+
+
 def create_clickhouse_schema(client: ClickHouseClient) -> None:
     """Create the database and all pipeline tables. Safe to re-run."""
     db = database_name()
@@ -540,7 +556,8 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
                 _SIGNAL_EVAL_DDL, _SYMBOL_METADATA_DDL, _AGENT_RUNS_DDL, _AGENT_STEPS_DDL,
                 _STRATEGY_PROPOSALS_DDL, _AGENT_GOALS_DDL, _UNIVERSE_DDL,
                 _AGENT_REQUESTS_DDL, _STRATEGY_ASSIGNMENTS_DDL, _CHANGE_LOG_DDL,
-                _GENERATED_STRATEGIES_DDL, _CIRCUIT_BREAKERS_DDL, _AGENT_RUN_SCORES_DDL):
+                _GENERATED_STRATEGIES_DDL, _CIRCUIT_BREAKERS_DDL, _AGENT_RUN_SCORES_DDL,
+                _STRATEGY_PERFORMANCE_DDL):
         client.command(ddl.format(db=db))
 
     if legacy_tuned:

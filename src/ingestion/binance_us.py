@@ -16,7 +16,7 @@ from src.ingestion.tickers import TICKER_ALIASES
 
 BINANCE_US_SYMBOLS: tuple[str, ...] = tuple(t for t in TICKER_ALIASES if t != "MATIC")
 
-_INTERVAL_SECONDS = {"1h": 3600, "1d": 86400}
+_INTERVAL_SECONDS = {"5m": 300, "1h": 3600, "1d": 86400}
 _KLINES_URL = "https://api.binance.us/api/v3/klines"
 _PAGE = 1000
 
