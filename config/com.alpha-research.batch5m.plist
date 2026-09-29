@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.alpha-research.batch5m</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/.venv/bin/python</string>
+        <string>-m</string>
+        <string>src.meta_learning.batch</string>
+        <string>--interval</string>
+        <string>5m</string>
+        <string>--symbols</string>
+        <string>DOGE,XRP,ADA</string>
+        <string>--method</string>
+        <string>grid</string>
+        <string>--workers</string>
+        <string>3</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine</string>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/data/batch5m.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/data/batch5m.log</string>
+</dict>
+</plist>
