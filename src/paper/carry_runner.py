@@ -14,6 +14,7 @@ perp execution is out of scope and, per policy, never pushed.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta
 
 from src.backtesting.data import load_funding
 from src.backtesting.engine import run_carry_regime_backtest
@@ -28,29 +29,44 @@ DEFAULTS = {"enter_window": 72, "exit_window": 336,
             "enter_level": 0.0, "exit_level": -5e-5}
 
 
-def replay(client, symbol: str, fee: float | None = None) -> int:
-    """Write the full regime-guarded carry equity curve for one symbol."""
+def replay(client, symbol: str, fee: float | None = None,
+           since: datetime | None = None) -> int:
+    """Write the regime-guarded carry equity curve for one symbol.
+
+    ``since`` writes only bars at/after that timestamp (idempotent top-up).
+    """
     funding = load_funding(client, symbol)
     if fee is None:
         fee = fee_for_symbol(client, symbol) + perp_fee()
     result = run_carry_regime_backtest(funding, fee=fee, **DEFAULTS)
     start = funding.index[0]
     rows = [EquityRow(ts.to_pydatetime(), float(eq), float(eq), 0.0, 0.0, "carry")
-            for ts, eq in result.equity_curve.items() if ts >= start]
+            for ts, eq in result.equity_curve.items()
+            if ts >= start and (since is None or ts >= since)]
     return store.insert_equity(client, CARRY_STRATEGY, symbol, rows)
+
+
+def step(client, symbol: str, fee: float | None = None) -> int:
+    """Append only carry bars newer than what's already stored."""
+    last = store.last_paper_ts(client, CARRY_STRATEGY, symbol)
+    if last is None:
+        return replay(client, symbol, fee=fee)
+    return replay(client, symbol, fee=fee, since=last + timedelta(hours=1))
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Paper-trade funding carry")
     parser.add_argument("--symbols", default="all")
     parser.add_argument("--fee", type=float, default=None)
+    parser.add_argument("--step", action="store_true",
+                        help="only append bars newer than stored (default: full replay)")
     args = parser.parse_args(argv)
 
     ch = get_clickhouse_client()
     symbols = universe(ch) if args.symbols == "all" else tuple(args.symbols.split(","))
     for symbol in symbols:
         try:
-            n = replay(ch, symbol, fee=args.fee)
+            n = (step if args.step else replay)(ch, symbol, fee=args.fee)
             print(f"funding_carry {symbol}: {n} bars")
         except Exception as exc:
             print(f"funding_carry {symbol}: FAILED: {exc}")

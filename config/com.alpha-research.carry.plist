@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.alpha-research.carry</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/.venv/bin/python</string>
+        <string>-m</string>
+        <string>src.paper.carry_runner</string>
+        <string>--step</string>
+        <string>--symbols</string>
+        <string>BTC,ETH,SOL,DOGE,LINK,ADA,AVAX,XRP,BNB,DOT,LTC,MATIC</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine</string>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/data/carry.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/data/carry.log</string>
+</dict>
+</plist>

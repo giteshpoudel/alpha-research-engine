@@ -29,6 +29,11 @@ def test_carry_replay_is_idempotent(ch_client):
     assert rows[1] >= 0.0
 
 
+def test_carry_step_adds_nothing_when_caught_up(ch_client):
+    assert carry_runner.replay(ch_client, "ETH") > 0
+    assert carry_runner.step(ch_client, "ETH") == 0
+
+
 def test_carry_equity_accumulates_for_positive_funding(ch_client):
     carry_runner.replay(ch_client, "BTC")
     first, last = ch_client.query(
