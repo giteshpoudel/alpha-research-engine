@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from src.backtesting.data import WINDOWS, load_ohlcv
+from src.backtesting.fees import fee_for_strategy
 from src.backtesting.runner import DEFAULT_FEE
 from src.backtesting.strategies import registry
 from src.ingestion.schemas import get_clickhouse_client
@@ -43,6 +44,10 @@ def _interval_for(client, strategy: str, symbol: str) -> str:
 
 def _step_delta(interval: str) -> timedelta:
     return _INTERVAL_DELTA.get(interval, timedelta(hours=1))
+
+
+def _fee_for(requested: float | None, strategy: str) -> float:
+    return fee_for_strategy(strategy) if requested is None else requested
 
 
 def _strategy_for(client, requested: str, symbol: str) -> str:
@@ -218,7 +223,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--symbols", default="all",
                         help="comma-separated tickers or 'all' (default: all 12)")
     parser.add_argument("--strategy", default=STRATEGY)
-    parser.add_argument("--fee", type=float, default=DEFAULT_FEE)
+    parser.add_argument("--fee", type=float, default=None,
+                        help="override fee; default is per-interval (see fees.py)")
     parser.add_argument("--once", action="store_true", help="incremental top-up + forward step")
     parser.add_argument("--replay", action="store_true", help="rebuild history from --from")
     parser.add_argument("--from", dest="start", default="2025-01-01", metavar="YYYY-MM-DD")
@@ -237,7 +243,8 @@ def main(argv: list[str] | None = None) -> None:
         for symbol in symbols:
             try:
                 strategy = _strategy_for(client, args.strategy, symbol)
-                n = replay(client, strategy, symbol, start, end, fee=args.fee)
+                n = replay(client, strategy, symbol, start, end,
+                           fee=_fee_for(args.fee, strategy))
                 print(f"paper replay {symbol} [{strategy}]: {n} bars")
             except Exception as exc:
                 print(f"paper replay {symbol}: FAILED: {exc}")
@@ -250,7 +257,7 @@ def main(argv: list[str] | None = None) -> None:
     for symbol in symbols:
         try:
             strategy = _strategy_for(client, args.strategy, symbol)
-            n = step_forward(client, strategy, symbol, fee=args.fee)
+            n = step_forward(client, strategy, symbol, fee=_fee_for(args.fee, strategy))
             print(f"paper step {symbol} [{strategy}]: {n} bars")
         except Exception as exc:
             print(f"paper step {symbol}: FAILED: {exc}")

@@ -24,6 +24,7 @@ from src.meta_learning.tuner import (
     adopt_candidate,
     folds_for,
     publish,
+    trade_edge,
     validate_params,
 )
 
@@ -118,13 +119,16 @@ def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
         baseline = get_tuned_params(ch, strategy, symbol)
         incumbent_val = (validate_params(ch, strategy, symbol, baseline, folds)
                          if baseline else None)
-        adopted = candidate_val is not None and adopt_candidate(
-            candidate_val, incumbent_val, margin=DEFAULT_ADOPT_MARGIN)
+        edge = trade_edge(ch, strategy, symbol, params, folds)
+        adopted = (candidate_val is not None
+                   and adopt_candidate(candidate_val, incumbent_val,
+                                       margin=DEFAULT_ADOPT_MARGIN)
+                   and (edge is None or edge > 0.0))  # min-edge: net-of-fee trades must pay
         if adopted and publish_adopted and candidate_val is not None:
             publish(ch, strategy, symbol, _record(params, candidate_val, len(folds)),
                     datetime.now(timezone.utc))
         evidence = {"candidate_val": candidate_val, "incumbent_val": incumbent_val,
-                    "folds": len(folds)}
+                    "avg_trade_return": edge, "folds": len(folds)}
         reason = f"candidate {candidate_val} vs incumbent {incumbent_val}"
 
     elif row["kind"] == "strategy":
@@ -141,9 +145,12 @@ def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
         incumbent_val = validate_params(ch, incumbent_strategy, symbol, incumbent_params,
                                         folds_for(incumbent_strategy))
         baseline = {"strategy": incumbent_strategy, "params": incumbent_params}
-        adopted = candidate == incumbent_strategy or (
-            candidate_val is not None and adopt_candidate(
-                candidate_val, incumbent_val, margin=DEFAULT_ADOPT_MARGIN))
+        edge = trade_edge(ch, candidate, symbol, candidate_params, candidate_folds)
+        adopted = (candidate == incumbent_strategy
+                   or (candidate_val is not None
+                       and adopt_candidate(candidate_val, incumbent_val,
+                                           margin=DEFAULT_ADOPT_MARGIN)
+                       and (edge is None or edge > 0.0)))
         if adopted and publish_adopted and candidate_val is not None:
             publish(ch, candidate, symbol,
                     _record(candidate_params, candidate_val, len(candidate_folds)),
@@ -151,7 +158,7 @@ def evaluate_proposal(ch, proposal_id: str, publish_adopted: bool = True,
             set_assignment(ch, symbol, candidate)
         evidence = {"candidate_strategy": candidate, "candidate_val": candidate_val,
                     "incumbent_strategy": incumbent_strategy, "incumbent_val": incumbent_val,
-                    "folds": len(candidate_folds)}
+                    "avg_trade_return": edge, "folds": len(candidate_folds)}
         reason = f"{candidate} {candidate_val} vs {incumbent_strategy} {incumbent_val}"
 
     else:

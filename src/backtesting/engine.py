@@ -30,6 +30,7 @@ class BacktestResult:
     win_rate: float
     num_trades: int
     equity_curve: pd.Series
+    avg_trade_return: float = 0.0  # mean net-of-fee PnL per trade
 
 
 STD_EPS = 1e-12  # below this, std/downside-std are treated as zero
@@ -75,10 +76,12 @@ def _metrics(equity: pd.Series, trade_pnls: list[float],
 
     wins = [p > 0 for p in trade_pnls]
     win_rate = float(sum(wins) / len(wins)) if wins else 0.0
+    avg_trade = float(sum(trade_pnls) / len(trade_pnls)) if trade_pnls else 0.0
     return BacktestResult(
         total_return=total_return, sharpe=sharpe, sortino=sortino,
         max_drawdown=max_dd, calmar=calmar, win_rate=win_rate,
         num_trades=len(trade_pnls), equity_curve=equity,
+        avg_trade_return=avg_trade,
     )
 
 

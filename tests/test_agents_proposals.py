@@ -5,6 +5,13 @@ import pytest
 from src.agents import proposals
 from src.ingestion.schemas import database_name, get_clickhouse_client
 
+
+@pytest.fixture(autouse=True)
+def _no_trade_edge(monkeypatch):
+    # The min-edge gate runs real backtests; stub it so these tests stay fast
+    # and focused on the champion/challenger logic.
+    monkeypatch.setattr(proposals, "trade_edge", lambda *a, **k: None)
+
 CHANGE = {"strategy": "TEST_prop", "symbol": "BTC",
           "params": {"window": 24, "z_entry": -2.0, "z_exit": 0.0}}
 
