@@ -20,6 +20,11 @@
     <integer>1800</integer>
     <key>RunAtLoad</key>
     <false/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>MIN_DSR_PROB</key>
+        <string>0.95</string>
+    </dict>
     <key>StandardOutPath</key>
     <string>/Users/giteshpoudel/Documents/GitHub/alpha-research-engine/data/batch.log</string>
     <key>StandardErrorPath</key>

@@ -106,7 +106,7 @@ def _fit_params(args: FitArgs, ch) -> dict:
 
     record, _ = fit(_client(ch), args.strategy, args.symbol, n_trials=args.n_trials)
     return {"params": record["params"], "validation_sharpe": record["validation_sharpe"],
-            "folds": record["folds"]}
+            "folds": record["folds"], "dsr": record.get("dsr")}
 
 
 @register("validate_params", "Validation Sharpe of fixed params over the IS folds.", ValidateArgs)

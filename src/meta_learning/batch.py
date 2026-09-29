@@ -21,6 +21,7 @@ from src.agents.change_log import log as log_change
 from src.backtesting.strategies.registry import STRATEGY_NAMES
 from src.ingestion.schemas import get_clickhouse_client
 from src.ingestion.universe import universe
+from src.meta_learning import selection
 from src.meta_learning.tuner import (
     DEFAULT_ADOPT_MARGIN,
     adopt_candidate,
@@ -90,7 +91,6 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
     else:
         results = _run_pool()
 
-    min_dsr = float(os.environ.get("MIN_DSR_PROB", "0"))
     adopted = 0
     for res in results:
         if res.get("error") or res["candidate_val"] is None:
@@ -98,7 +98,7 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
         if not adopt_candidate(res["candidate_val"], res["incumbent_val"], margin=margin):
             continue
         # Multiplicity gate: reject best-of-many flukes when enabled.
-        if min_dsr > 0 and res.get("dsr") is not None and res["dsr"] < min_dsr:
+        if not selection.passes_dsr(res.get("dsr")):
             continue
         publish(ch, res["strategy"], res["symbol"],
                 {"params": res["params"], "train_sharpe": 0.0,

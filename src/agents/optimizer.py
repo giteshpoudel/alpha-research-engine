@@ -164,6 +164,12 @@ def _tune_iteration(ch, run, strategy: str, symbol: str, n_trials: int,
         run.step("tune", {"symbol": symbol, "strategy": strategy},
                  {"error": fitted.error})
         return {"action": "none"}
+    from src.meta_learning import selection
+    if not selection.passes_dsr(fitted.data.get("dsr")):
+        run.step("dsr_reject", {"symbol": symbol, "strategy": strategy,
+                                "dsr": fitted.data.get("dsr")},
+                 {"action": "none", "reason": "below MIN_DSR_PROB"})
+        return {"action": "none", "reason": "dsr_gate"}
     change = {"strategy": strategy, "symbol": symbol, "params": fitted.data["params"]}
     proposal_id = proposals.create_proposal(
         ch, f"rapid-tune {strategy} {symbol}", change, kind="params",

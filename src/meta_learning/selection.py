@@ -9,9 +9,24 @@ an annualized Sharpe with :func:`per_bar_sharpe`.
 from __future__ import annotations
 
 import math
+import os
 from statistics import NormalDist
 
 _EULER = 0.5772156649015329
+
+
+def min_dsr_prob() -> float:
+    """Adoption floor for the Deflated Sharpe probability (0 = gate disabled)."""
+    return float(os.environ.get("MIN_DSR_PROB", "0"))
+
+
+def passes_dsr(dsr: float | None, threshold: float | None = None) -> bool:
+    """True when the DSR gate is off or the candidate clears it."""
+    if threshold is None:
+        threshold = min_dsr_prob()
+    if threshold <= 0:
+        return True
+    return dsr is not None and dsr >= threshold
 
 
 def per_bar_sharpe(annualized_sharpe: float, periods_per_year: float) -> float:

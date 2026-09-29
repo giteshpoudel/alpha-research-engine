@@ -31,6 +31,16 @@ def test_per_bar_sharpe_conversion():
     assert selection.per_bar_sharpe(8760 ** 0.5, 8760) == pytest.approx(1.0)
 
 
+def test_min_dsr_prob_gate(monkeypatch):
+    monkeypatch.delenv("MIN_DSR_PROB", raising=False)
+    assert selection.min_dsr_prob() == 0.0
+    assert selection.passes_dsr(None) is True          # gate off by default
+    monkeypatch.setenv("MIN_DSR_PROB", "0.95")
+    assert selection.passes_dsr(0.97) is True
+    assert selection.passes_dsr(0.90) is False
+    assert selection.passes_dsr(None) is False
+
+
 def test_expected_max_sharpe_is_positive_and_grows():
     assert selection.expected_max_sharpe(1, 0.05) == 0.0
     assert selection.expected_max_sharpe(100, 0.05) > 0
