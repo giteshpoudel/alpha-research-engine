@@ -6,11 +6,46 @@ pre-sliced data and cannot reach outside their window by accident.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 import pandas as pd
 
 from src.ingestion.schemas import database_name
+
+# Glitch guardrail: a 5m bar moving more than this (close-to-close) is treated
+# as a bad print, not a market move. Configurable per interval; set
+# GLITCH_FILTER=0 to disable.
+GLITCH_CAP_DEFAULT = {"5m": 0.05, "1h": 0.30, "1d": 1.00}
+
+
+def glitch_cap(interval: str) -> float | None:
+    if os.environ.get("GLITCH_FILTER", "1") == "0":
+        return None
+    env = os.environ.get(f"GLITCH_MAX_MOVE_{interval.upper()}")
+    if env is not None:
+        return float(env)
+    return GLITCH_CAP_DEFAULT.get(interval)
+
+
+def clean_ohlcv(df: pd.DataFrame, interval: str) -> pd.DataFrame:
+    """Neutralise bad prints: bars with an implausible close-to-close move get
+    their OHLC snapped to the prior close (a flat bar), and OHLC bounds are
+    enforced. Preserves the index so rolling windows stay aligned."""
+    cap = glitch_cap(interval)
+    if cap is None or len(df) < 2:
+        return df
+    out = df.copy()
+    close = out["close"]
+    spike = ((close / close.shift(1)) - 1.0).abs() > cap
+    spike.iloc[0] = False
+    clean_close = close.mask(spike).ffill()
+    out["close"] = clean_close
+    for col in ("open", "high", "low"):
+        out.loc[spike, col] = clean_close[spike]
+    out["high"] = out[["open", "high", "close"]].max(axis=1)
+    out["low"] = out[["open", "low", "close"]].min(axis=1)
+    return out
 
 WINDOWS: dict[str, tuple[datetime, datetime | None]] = {
     "IS": (datetime(2022, 1, 1, tzinfo=timezone.utc),
@@ -82,7 +117,7 @@ def load_ohlcv(ch_client, symbol: str, interval: str = "1h",
     df.index = _utc_index(df.pop("ts"))
     if not df.index.is_unique:
         raise ValueError(f"duplicate timestamps for {symbol} {interval} ohlcv — exchange scoping failed")
-    return df
+    return clean_ohlcv(df, interval)
 
 
 def load_funding(ch_client, symbol: str,
