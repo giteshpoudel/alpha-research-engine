@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 import vectorbt as vbt
 
@@ -94,6 +95,78 @@ def run_signal_backtest(close: pd.Series, entries: pd.Series, exits: pd.Series,
     equity = equity / equity.iloc[0]
     pnls = [float(p) for p in pf.trades.records_readable["PnL"]]
     return _metrics(equity, pnls)
+
+
+def run_maker_backtest(df: pd.DataFrame, entries: pd.Series, exits: pd.Series,
+                       fee: float = 0.0, limit_bps: float = 5.0,
+                       max_wait: int = 1, taker_fee: float | None = None
+                       ) -> BacktestResult:
+    """Long-only passive (maker) execution on OHLC bars.
+
+    A signal posts a limit order ``limit_bps`` in the market's favor off the
+    signal bar's close (buy below, sell above). The order fills only if a later
+    bar trades through it (buy: ``low <= limit``; sell: ``high >= limit``), so
+    fill probability and adverse selection are implicit: passive bids fill when
+    price dips to them. Unfilled entries are cancelled after ``max_wait`` bars;
+    unfilled exits fall back to a market (taker) fill at that bar's close, and
+    any open position is force-closed at the last close with the taker fee.
+    """
+    if taker_fee is None:
+        taker_fee = fee
+    for series in (entries, exits):
+        if not isinstance(series, pd.Series):
+            raise TypeError("entries/exits must be pandas Series")
+    high = df["high"].to_numpy(dtype=float)
+    low = df["low"].to_numpy(dtype=float)
+    close = df["close"].to_numpy(dtype=float)
+    ent = entries.reindex(df.index).fillna(False).to_numpy(dtype=bool)
+    ext = exits.reindex(df.index).fillna(False).to_numpy(dtype=bool)
+    off = limit_bps / 1e4
+    n = len(df)
+    equity = np.ones(n, dtype=float)
+    cash, qty, entry_cash = 1.0, 0.0, 1.0
+    pending: tuple[str, float, int] | None = None
+    trade_pnls: list[float] = []
+
+    for i in range(n):
+        if pending is not None:
+            side, price, waited = pending
+            filled = ((side == "buy" and low[i] <= price)
+                      or (side == "sell" and high[i] >= price))
+            if filled:
+                if side == "buy":
+                    entry_cash = cash
+                    qty = cash / (price * (1.0 + fee))
+                    cash = 0.0
+                else:
+                    cash = qty * price * (1.0 - fee)
+                    qty = 0.0
+                    trade_pnls.append(cash / entry_cash - 1.0)
+                pending = None
+            elif waited + 1 >= max_wait:
+                if side == "sell":
+                    cash = qty * close[i] * (1.0 - taker_fee)
+                    qty = 0.0
+                    trade_pnls.append(cash / entry_cash - 1.0)
+                pending = None
+            else:
+                pending = (side, price, waited + 1)
+
+        if pending is None:
+            if qty == 0.0 and ent[i]:
+                pending = ("buy", close[i] * (1.0 - off), 0)
+            elif qty > 0.0 and ext[i]:
+                pending = ("sell", close[i] * (1.0 + off), 0)
+
+        equity[i] = cash + qty * close[i]
+
+    if qty > 0.0:
+        cash = qty * close[-1] * (1.0 - taker_fee)
+        trade_pnls.append(cash / entry_cash - 1.0)
+        equity[-1] = cash
+
+    series = pd.Series(equity, index=df.index, name="equity")
+    return _metrics(series, trade_pnls, total_return=float(series.iloc[-1] - 1.0))
 
 
 def run_funding_backtest(funding: pd.Series, threshold: float = 0.0001,

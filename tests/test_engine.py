@@ -2,9 +2,65 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.backtesting.engine import run_funding_backtest, run_signal_backtest
+from src.backtesting.engine import (
+    run_funding_backtest,
+    run_maker_backtest,
+    run_signal_backtest,
+)
 
 IDX = pd.date_range("2024-01-01", periods=100, freq="1h", tz="UTC")
+MIDX = pd.date_range("2024-01-01", periods=6, freq="1h", tz="UTC")
+
+
+def _ohlc(close):
+    s = pd.Series(close, index=MIDX, dtype=float)
+    return pd.DataFrame({"high": s + 1.0, "low": s - 1.0, "close": s})
+
+
+def test_maker_buy_fills_on_dip_and_sells_into_strength():
+    df = _ohlc([100, 100, 110, 110, 110, 110])
+    entries = pd.Series([True, False, False, False, False, False], index=MIDX)
+    exits = pd.Series([False, False, True, False, False, False], index=MIDX)
+    result = run_maker_backtest(df, entries, exits, fee=0.0, limit_bps=5.0, max_wait=1)
+    # buy limit 100*(1-5bps)=99.95 fills on bar1 (low 99 <= 99.95);
+    # sell limit 110*(1+5bps)=110.055 fills on bar3 (high 111 >= 110.055)
+    assert result.num_trades == 1
+    assert result.total_return == pytest.approx(110.055 / 99.95 - 1.0, rel=1e-9)
+    assert result.equity_curve.iloc[0] == 1.0
+
+
+def test_maker_entry_not_filled_when_price_never_dips():
+    df = _ohlc([100, 101, 102, 103, 104, 105])  # lows stay above the 99.95 bid
+    entries = pd.Series([True, False, False, False, False, False], index=MIDX)
+    exits = pd.Series([False, False, True, False, False, False], index=MIDX)
+    result = run_maker_backtest(df, entries, exits, fee=0.0)
+    assert result.num_trades == 0
+    assert result.total_return == 0.0
+
+
+def test_maker_exit_falls_back_to_taker_after_max_wait():
+    df = pd.DataFrame({
+        "high": pd.Series([100.04] * 6, index=MIDX),
+        "low": pd.Series([99.9] * 6, index=MIDX),
+        "close": pd.Series([100.0] * 6, index=MIDX),
+    })
+    entries = pd.Series([True, False, False, False, False, False], index=MIDX)
+    exits = pd.Series([False, False, True, False, False, False], index=MIDX)
+    result = run_maker_backtest(df, entries, exits, fee=0.0, limit_bps=5.0,
+                                max_wait=1, taker_fee=0.001)
+    # entry at 99.95 fills; sell limit 100.05 never touched (high 100.04) ->
+    # fallback taker sell at close 100 with 0.1% fee
+    assert result.num_trades == 1
+    assert result.total_return == pytest.approx((100.0 * 0.999) / 99.95 - 1.0, rel=1e-9)
+
+
+def test_maker_applies_maker_fee_on_both_sides():
+    df = _ohlc([100, 100, 110, 110, 110, 110])
+    entries = pd.Series([True, False, False, False, False, False], index=MIDX)
+    exits = pd.Series([False, False, True, False, False, False], index=MIDX)
+    result = run_maker_backtest(df, entries, exits, fee=0.001, limit_bps=5.0, max_wait=1)
+    expected = (110.055 * (1 - 0.001)) / (99.95 * (1 + 0.001)) - 1.0
+    assert result.total_return == pytest.approx(expected, rel=1e-9)
 
 
 def test_signal_backtest_monotonic_up_no_trades():

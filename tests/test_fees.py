@@ -25,3 +25,19 @@ def test_fee_for_symbol_uses_exchange(monkeypatch):
     monkeypatch.setattr("src.backtesting.data.exchange_for_symbol",
                         lambda ch, s: "coinbase")
     assert fees.fee_for_symbol(None, "PEPE") == 0.006
+
+
+def test_execution_mode_defaults_taker(monkeypatch):
+    monkeypatch.delenv("EXECUTION_MODE", raising=False)
+    monkeypatch.delenv("FEE_MODE", raising=False)
+    assert fees.execution_mode() == "taker"
+    monkeypatch.setenv("EXECUTION_MODE", "maker")
+    assert fees.execution_mode() == "maker"
+    assert fees.fee_for_exchange("binance_us") == 0.0  # maker side
+
+
+def test_maker_params_env(monkeypatch):
+    monkeypatch.setenv("MAKER_LIMIT_BPS", "3")
+    monkeypatch.setenv("MAKER_MAX_WAIT", "2")
+    assert fees.maker_limit_bps() == 3.0
+    assert fees.maker_max_wait() == 2

@@ -12,9 +12,13 @@ from datetime import datetime, timedelta, timezone
 
 import optuna
 
+from src.backtesting import fees
 from src.backtesting.data import load_funding, load_ohlcv
-from src.backtesting.engine import run_funding_backtest, run_signal_backtest
-from src.backtesting.fees import fee_for_symbol
+from src.backtesting.engine import (
+    run_funding_backtest,
+    run_maker_backtest,
+    run_signal_backtest,
+)
 from src.backtesting.strategies import registry
 from src.ingestion.schemas import database_name, get_clickhouse_client
 from src.ingestion.universe import universe
@@ -96,18 +100,35 @@ def _load_train_data(ch_client, strategy: str, symbol: str, start: datetime, end
     if base == "funding_arb":
         data = load_funding(ch_client, symbol, start=start, end=end)
     else:
-        data = load_ohlcv(ch_client, symbol, interval=interval, start=start, end=end)["close"]
+        data = load_ohlcv(ch_client, symbol, interval=interval, start=start, end=end)
     if len(_DATA_CACHE) >= _CACHE_MAX:
         _DATA_CACHE.clear()
     _DATA_CACHE[key] = data
     return data
 
 
-def _run(data, strategy: str, params: dict, fee: float):
+def _fees_for(ch_client, symbol: str, fee: float | None):
+    """(execution fee, taker fallback fee). Maker mode pays maker fees."""
+    maker = fees.execution_mode() == "maker"
+    if fee is None:
+        fee = fees.fee_for_symbol(ch_client, symbol,
+                                  mode="maker" if maker else "taker")
+    taker_fee = fees.fee_for_symbol(ch_client, symbol, mode="taker") if maker else None
+    return fee, taker_fee
+
+
+def _run(data, strategy: str, params: dict, fee: float,
+         taker_fee: float | None = None):
     if registry.base_name(strategy) == "funding_arb":
         return run_funding_backtest(data, threshold=params["threshold"], fee=fee)
-    entries, exits = registry.signals(strategy, data, params)
-    return run_signal_backtest(data, entries, exits, fee=fee)
+    close = data["close"] if hasattr(data, "columns") else data
+    entries, exits = registry.signals(strategy, close, params)
+    if fees.execution_mode() == "maker" and hasattr(data, "columns"):
+        return run_maker_backtest(data, entries, exits, fee=fee,
+                                  limit_bps=fees.maker_limit_bps(),
+                                  max_wait=fees.maker_max_wait(),
+                                  taker_fee=taker_fee if taker_fee is not None else fee)
+    return run_signal_backtest(close, entries, exits, fee=fee)
 
 
 def _suggest(trial, strategy: str) -> dict:
@@ -125,7 +146,7 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
     Does not publish; the caller decides (champion/challenger adoption).
     Intraday strategies use their own (shorter, later) IS window.
     """
-    fee = fee_for_symbol(ch_client, symbol) if fee is None else fee
+    fee, taker_fee = _fees_for(ch_client, symbol, fee)
     folds = (folds_for(strategy) if is_start is None or is_end_exclusive is None
              else walk_forward_folds(is_start, is_end_exclusive))
     fold_params, fold_train_sharpes, fold_val_sharpes = [], [], []
@@ -137,7 +158,8 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
                 direction="maximize", sampler=optuna.samplers.TPESampler(seed=seed)
             )
             study.optimize(
-                lambda trial: _run(train_data, strategy, _suggest(trial, strategy), fee).sharpe,
+                lambda trial: _run(train_data, strategy, _suggest(trial, strategy),
+                                   fee, taker_fee).sharpe,
                 n_trials=n_trials,
             )
         except ValueError as exc:
@@ -147,7 +169,7 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
         params = dict(study.best_params)
         fold_params.append(params)
         fold_train_sharpes.append(float(study.best_value))
-        fold_val_sharpes.append(float(_run(val_data, strategy, params, fee).sharpe))
+        fold_val_sharpes.append(float(_run(val_data, strategy, params, fee, taker_fee).sharpe))
 
     if not fold_params:
         raise ValueError(f"no tunable folds for {strategy} {symbol}")
@@ -165,7 +187,7 @@ def fit_grid(ch_client, strategy: str, symbol: str, fee: float | None = None,
              is_start: datetime | None = None, is_end_exclusive: datetime | None = None
              ) -> tuple[dict, list]:
     """Fast walk-forward tuning by scanning a coarse param grid per fold."""
-    fee = fee_for_symbol(ch_client, symbol) if fee is None else fee
+    fee, taker_fee = _fees_for(ch_client, symbol, fee)
     grid = registry.grid(strategy)
     if not grid:
         raise ValueError(f"no grid for {strategy}")
@@ -180,14 +202,14 @@ def fit_grid(ch_client, strategy: str, symbol: str, fee: float | None = None,
             continue
         best, best_score = None, float("-inf")
         for params in grid:
-            score = _run(train_data, strategy, params, fee).sharpe
+            score = _run(train_data, strategy, params, fee, taker_fee).sharpe
             if score > best_score:
                 best, best_score = params, score
         if best is None:
             continue
         fold_params.append(best)
         fold_train.append(best_score)
-        fold_val.append(float(_run(val_data, strategy, best, fee).sharpe))
+        fold_val.append(float(_run(val_data, strategy, best, fee, taker_fee).sharpe))
     if not fold_params:
         raise ValueError(f"no tunable folds for {strategy} {symbol}")
     index = max(range(len(fold_params)), key=lambda i: fold_val[i])
@@ -215,21 +237,21 @@ def publish(ch_client, strategy: str, symbol: str, record: dict, valid_from: dat
 def validate_params(ch_client, strategy: str, symbol: str, params: dict,
                     folds: list, fee: float | None = None) -> float | None:
     """Mean validation Sharpe of a fixed param set over the given folds."""
-    fee = fee_for_symbol(ch_client, symbol) if fee is None else fee
+    fee, taker_fee = _fees_for(ch_client, symbol, fee)
     values = []
     for _, _, val_start, val_end in folds:
         try:
             data = _load_train_data(ch_client, strategy, symbol, val_start, val_end)
         except ValueError:
             continue
-        values.append(float(_run(data, strategy, params, fee).sharpe))
+        values.append(float(_run(data, strategy, params, fee, taker_fee).sharpe))
     return sum(values) / len(values) if values else None
 
 
 def trade_edge(ch_client, strategy: str, symbol: str, params: dict,
                folds: list | None = None, fee: float | None = None) -> float | None:
     """Mean net-of-fee PnL per trade across folds (min-edge filter input)."""
-    fee = fee_for_symbol(ch_client, symbol) if fee is None else fee
+    fee, taker_fee = _fees_for(ch_client, symbol, fee)
     folds = folds if folds is not None else folds_for(strategy)
     edges = []
     for _, _, val_start, val_end in folds:
@@ -237,7 +259,7 @@ def trade_edge(ch_client, strategy: str, symbol: str, params: dict,
             data = _load_train_data(ch_client, strategy, symbol, val_start, val_end)
         except ValueError:
             continue
-        edges.append(_run(data, strategy, params, fee).avg_trade_return)
+        edges.append(_run(data, strategy, params, fee, taker_fee).avg_trade_return)
     return sum(edges) / len(edges) if edges else None
 
 

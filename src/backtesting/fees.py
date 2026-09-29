@@ -22,12 +22,26 @@ EXCHANGE_FEES = {
 _FALLBACK = {"maker": 0.0000, "taker": 0.0010}
 
 
+def execution_mode() -> str:
+    """``taker`` (market fills) or ``maker`` (passive limit fills)."""
+    return os.environ.get("EXECUTION_MODE") or os.environ.get("FEE_MODE", "taker")
+
+
 def fee_mode() -> str:
-    return os.environ.get("FEE_MODE", "taker")
+    # Backwards-compatible alias for the fee side of the execution mode.
+    return execution_mode()
+
+
+def maker_limit_bps() -> float:
+    return float(os.environ.get("MAKER_LIMIT_BPS", "5"))
+
+
+def maker_max_wait() -> int:
+    return int(os.environ.get("MAKER_MAX_WAIT", "1"))
 
 
 def fee_for_exchange(exchange: str, mode: str | None = None) -> float:
-    mode = mode or fee_mode()
+    mode = mode or execution_mode()
     env = os.environ.get(f"FEE_{exchange.upper()}_{mode.upper()}")
     if env is not None:
         return float(env)
