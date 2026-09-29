@@ -19,13 +19,13 @@ from src.backtesting.engine import (
     run_maker_backtest,
     run_signal_backtest,
 )
-from src.backtesting.strategies import registry
+from src.backtesting.strategies import lead_lag, registry
 from src.ingestion.schemas import database_name, get_clickhouse_client
 from src.ingestion.universe import universe
 
 # funding_arb retired 2026-09 (fee drag > carry); it stays in the engine but is
 # not a tunable signal strategy. All registry strategies are tuned.
-TUNABLE_STRATEGIES = registry.STRATEGY_NAMES
+TUNABLE_STRATEGIES = [*registry.STRATEGY_NAMES, "lead_lag"]
 DEFAULT_FEE = 0.001
 _TRAIN_MONTHS, _VAL_MONTHS, _STEP_MONTHS = 12, 3, 3
 _IS_START = datetime(2022, 1, 1, tzinfo=timezone.utc)
@@ -99,6 +99,11 @@ def _load_train_data(ch_client, strategy: str, symbol: str, start: datetime, end
         return cached
     if base == "funding_arb":
         data = load_funding(ch_client, symbol, start=start, end=end)
+    elif base == "lead_lag":
+        data = load_ohlcv(ch_client, symbol, interval=interval, start=start, end=end)
+        leader = load_ohlcv(ch_client, "BTC", interval=interval, start=start, end=end)
+        data = data.assign(leader_close=leader["close"].reindex(data.index))
+        data = data.dropna(subset=["leader_close"])
     else:
         data = load_ohlcv(ch_client, symbol, interval=interval, start=start, end=end)
     if len(_DATA_CACHE) >= _CACHE_MAX:
@@ -122,7 +127,10 @@ def _run(data, strategy: str, params: dict, fee: float,
     if registry.base_name(strategy) == "funding_arb":
         return run_funding_backtest(data, threshold=params["threshold"], fee=fee)
     close = data["close"] if hasattr(data, "columns") else data
-    entries, exits = registry.signals(strategy, close, params)
+    if registry.base_name(strategy) == "lead_lag":
+        entries, exits = lead_lag.signals(close, data["leader_close"], **params)
+    else:
+        entries, exits = registry.signals(strategy, close, params)
     if fees.execution_mode() == "maker" and hasattr(data, "columns"):
         return run_maker_backtest(data, entries, exits, fee=fee,
                                   limit_bps=fees.maker_limit_bps(),
@@ -132,9 +140,12 @@ def _run(data, strategy: str, params: dict, fee: float,
 
 
 def _suggest(trial, strategy: str) -> dict:
-    if registry.base_name(strategy) == "funding_arb":
+    base = registry.base_name(strategy)
+    if base == "funding_arb":
         return {"threshold": trial.suggest_float("threshold", 1e-5, 1e-3, log=True)}
-    return registry.SEARCH_SPACES[registry.base_name(strategy)](trial)
+    if base == "lead_lag":
+        return lead_lag.search(trial)
+    return registry.SEARCH_SPACES[base](trial)
 
 
 def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,

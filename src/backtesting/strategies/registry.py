@@ -84,6 +84,10 @@ GRIDS: dict[str, list[dict]] = {
     "ema_cross": [{"fast": f, "slow": s} for f in (5, 10, 20) for s in (30, 50, 80)],
     "macd": [{"fast": f, "slow": s, "signal": 9}
              for f in (8, 12, 16) for s in (21, 26, 35)],
+    # cross-asset lead-lag (BTC leads); special-cased in the tuner, not a
+    # single-series SIGNAL_FUNCS entry so paper/assignments can't dispatch to it.
+    "lead_lag": [{"lead_window": w, "threshold": th, "exit_threshold": 0.0}
+                 for w in (3, 6, 12, 24) for th in (-0.005, 0.0, 0.005)],
 }
 
 STRATEGY_NAMES: list[str] = list(SIGNAL_FUNCS)
