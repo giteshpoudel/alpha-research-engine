@@ -32,6 +32,11 @@ def fee_mode() -> str:
     return execution_mode()
 
 
+def slippage_bps() -> float:
+    """Extra per-side cost (half-spread + slippage) added on top of the fee."""
+    return float(os.environ.get("SLIPPAGE_BPS", "0"))
+
+
 def execution_lag() -> int:
     """Bars between signal and fill (default 1: signal at close t, fill t+1)."""
     return int(os.environ.get("EXECUTION_LAG", "1"))

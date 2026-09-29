@@ -43,6 +43,13 @@ def test_execution_lag_default_and_env(monkeypatch):
     assert fees.execution_lag() == 0
 
 
+def test_slippage_default_and_env(monkeypatch):
+    monkeypatch.delenv("SLIPPAGE_BPS", raising=False)
+    assert fees.slippage_bps() == 0.0
+    monkeypatch.setenv("SLIPPAGE_BPS", "7.5")
+    assert fees.slippage_bps() == 7.5
+
+
 def test_maker_params_env(monkeypatch):
     monkeypatch.setenv("MAKER_LIMIT_BPS", "3")
     monkeypatch.setenv("MAKER_MAX_WAIT", "2")

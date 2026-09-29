@@ -115,10 +115,12 @@ def _load_train_data(ch_client, strategy: str, symbol: str, start: datetime, end
 def _fees_for(ch_client, symbol: str, fee: float | None):
     """(execution fee, taker fallback fee). Maker mode pays maker fees."""
     maker = fees.execution_mode() == "maker"
+    slip = fees.slippage_bps() / 1e4
     if fee is None:
         fee = fees.fee_for_symbol(ch_client, symbol,
-                                  mode="maker" if maker else "taker")
-    taker_fee = fees.fee_for_symbol(ch_client, symbol, mode="taker") if maker else None
+                                  mode="maker" if maker else "taker") + slip
+    taker_fee = (fees.fee_for_symbol(ch_client, symbol, mode="taker") + slip
+                 if maker else None)
     return fee, taker_fee
 
 

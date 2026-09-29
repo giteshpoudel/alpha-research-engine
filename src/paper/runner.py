@@ -48,7 +48,9 @@ def _step_delta(interval: str) -> timedelta:
 
 
 def _fee_for(requested: float | None, client, symbol: str) -> float:
-    return fee_for_symbol(client, symbol) if requested is None else requested
+    if requested is not None:
+        return requested
+    return fee_for_symbol(client, symbol) + fees.slippage_bps() / 1e4
 
 
 def _strategy_for(client, requested: str, symbol: str) -> str:

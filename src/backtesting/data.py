@@ -13,14 +13,15 @@ import pandas as pd
 
 from src.ingestion.schemas import database_name
 
-# Glitch guardrail: a 5m bar moving more than this (close-to-close) is treated
-# as a bad print, not a market move. Configurable per interval; set
-# GLITCH_FILTER=0 to disable.
+# Optional bad-print guardrail. OFF by default: an audit showed the 5m
+# "glitches" are real market-wide moves (e.g. the 2025-10-10 crash) with no
+# OHLC violations, so filtering them would delete genuine tail events.
+# Enable with GLITCH_FILTER=1; per-interval caps via GLITCH_MAX_MOVE_<INTERVAL>.
 GLITCH_CAP_DEFAULT = {"5m": 0.05, "1h": 0.30, "1d": 1.00}
 
 
 def glitch_cap(interval: str) -> float | None:
-    if os.environ.get("GLITCH_FILTER", "1") == "0":
+    if os.environ.get("GLITCH_FILTER", "0") == "0":
         return None
     env = os.environ.get(f"GLITCH_MAX_MOVE_{interval.upper()}")
     if env is not None:
