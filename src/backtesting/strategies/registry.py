@@ -88,6 +88,9 @@ GRIDS: dict[str, list[dict]] = {
     # single-series SIGNAL_FUNCS entry so paper/assignments can't dispatch to it.
     "lead_lag": [{"lead_window": w, "threshold": th, "exit_threshold": 0.0}
                  for w in (3, 6, 12, 24) for th in (-0.005, 0.0, 0.005)],
+    # delta-neutral funding carry; special-cased (funding series). Threshold is
+    # the minimum hourly funding rate required to stay positioned.
+    "funding_arb": [{"threshold": th} for th in (0.0, 5e-6, 1e-5, 2e-5, 5e-5)],
 }
 
 STRATEGY_NAMES: list[str] = list(SIGNAL_FUNCS)

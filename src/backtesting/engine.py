@@ -170,7 +170,8 @@ def run_maker_backtest(df: pd.DataFrame, entries: pd.Series, exits: pd.Series,
 
 
 def run_funding_backtest(funding: pd.Series, threshold: float = 0.0001,
-                         fee: float = 0.001) -> BacktestResult:
+                         fee: float = 0.001,
+                         exit_threshold: float | None = None) -> BacktestResult:
     """Funding-rate carry simulation (short perp + long spot).
 
     Per-bar PnL = funding rate while positioned, on fixed notional; each
@@ -181,9 +182,22 @@ def run_funding_backtest(funding: pd.Series, threshold: float = 0.0001,
     Sharpe/sortino are computed from the additive per-bar PnL series (with an
     epsilon zero-variance guard), and max drawdown from the additive curve.
     Basis risk assumed zero (documented approximation).
+
+    ``exit_threshold`` (default = ``threshold``) adds hysteresis: enter when
+    funding > threshold, exit only when funding < exit_threshold, so a
+    noisy series around the entry level doesn't churn positions.
     """
-    positioned = funding > threshold
-    pos = positioned.astype(int)
+    if exit_threshold is None:
+        exit_threshold = threshold
+    state, positions = 0, []
+    for rate in funding:
+        if state == 0 and rate > threshold:
+            state = 1
+        elif state == 1 and rate < exit_threshold:
+            state = 0
+        positions.append(state)
+    pos = pd.Series(positions, index=funding.index)
+    positioned = pos.astype(bool)
     flips = pos.diff().fillna(pos.iloc[0]).abs()
     cost = flips * 2.0 * fee
     pnl = funding.where(positioned, 0.0) - cost

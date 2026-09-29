@@ -32,6 +32,11 @@ def fee_mode() -> str:
     return execution_mode()
 
 
+def perp_fee() -> float:
+    """Perp-leg taker fee for delta-neutral carry (Hyperliquid default 4.5 bps)."""
+    return float(os.environ.get("PERP_TAKER_FEE", "0.00045"))
+
+
 def slippage_bps() -> float:
     """Extra per-side cost (half-spread + slippage) added on top of the fee."""
     return float(os.environ.get("SLIPPAGE_BPS", "0"))

@@ -25,7 +25,7 @@ from src.ingestion.universe import universe
 
 # funding_arb retired 2026-09 (fee drag > carry); it stays in the engine but is
 # not a tunable signal strategy. All registry strategies are tuned.
-TUNABLE_STRATEGIES = [*registry.STRATEGY_NAMES, "lead_lag"]
+TUNABLE_STRATEGIES = [*registry.STRATEGY_NAMES, "lead_lag", "funding_arb"]
 DEFAULT_FEE = 0.001
 _TRAIN_MONTHS, _VAL_MONTHS, _STEP_MONTHS = 12, 3, 3
 _IS_START = datetime(2022, 1, 1, tzinfo=timezone.utc)
@@ -112,13 +112,18 @@ def _load_train_data(ch_client, strategy: str, symbol: str, start: datetime, end
     return data
 
 
-def _fees_for(ch_client, symbol: str, fee: float | None):
-    """(execution fee, taker fallback fee). Maker mode pays maker fees."""
+def _fees_for(ch_client, symbol: str, fee: float | None, strategy: str = ""):
+    """(execution fee, taker fallback fee). Maker mode pays maker fees.
+
+    Delta-neutral carry needs both legs: add the perp taker fee to the spot fee.
+    """
     maker = fees.execution_mode() == "maker"
     slip = fees.slippage_bps() / 1e4
     if fee is None:
         fee = fees.fee_for_symbol(ch_client, symbol,
                                   mode="maker" if maker else "taker") + slip
+        if registry.base_name(strategy) == "funding_arb":
+            fee += fees.perp_fee()
     taker_fee = (fees.fee_for_symbol(ch_client, symbol, mode="taker") + slip
                  if maker else None)
     return fee, taker_fee
@@ -163,7 +168,7 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
     Does not publish; the caller decides (champion/challenger adoption).
     Intraday strategies use their own (shorter, later) IS window.
     """
-    fee, taker_fee = _fees_for(ch_client, symbol, fee)
+    fee, taker_fee = _fees_for(ch_client, symbol, fee, strategy)
     folds = (folds_for(strategy) if is_start is None or is_end_exclusive is None
              else walk_forward_folds(is_start, is_end_exclusive))
     fold_params, fold_train_sharpes, fold_val_sharpes = [], [], []
@@ -204,7 +209,7 @@ def fit_grid(ch_client, strategy: str, symbol: str, fee: float | None = None,
              is_start: datetime | None = None, is_end_exclusive: datetime | None = None
              ) -> tuple[dict, list]:
     """Fast walk-forward tuning by scanning a coarse param grid per fold."""
-    fee, taker_fee = _fees_for(ch_client, symbol, fee)
+    fee, taker_fee = _fees_for(ch_client, symbol, fee, strategy)
     grid = registry.grid(strategy)
     if not grid:
         raise ValueError(f"no grid for {strategy}")
@@ -254,7 +259,7 @@ def publish(ch_client, strategy: str, symbol: str, record: dict, valid_from: dat
 def validate_params(ch_client, strategy: str, symbol: str, params: dict,
                     folds: list, fee: float | None = None) -> float | None:
     """Mean validation Sharpe of a fixed param set over the given folds."""
-    fee, taker_fee = _fees_for(ch_client, symbol, fee)
+    fee, taker_fee = _fees_for(ch_client, symbol, fee, strategy)
     values = []
     for _, _, val_start, val_end in folds:
         try:
@@ -268,7 +273,7 @@ def validate_params(ch_client, strategy: str, symbol: str, params: dict,
 def trade_edge(ch_client, strategy: str, symbol: str, params: dict,
                folds: list | None = None, fee: float | None = None) -> float | None:
     """Mean net-of-fee PnL per trade across folds (min-edge filter input)."""
-    fee, taker_fee = _fees_for(ch_client, symbol, fee)
+    fee, taker_fee = _fees_for(ch_client, symbol, fee, strategy)
     folds = folds if folds is not None else folds_for(strategy)
     edges = []
     for _, _, val_start, val_end in folds:
