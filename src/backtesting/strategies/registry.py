@@ -10,7 +10,15 @@ import importlib.util
 from pathlib import Path
 from typing import Callable
 
-from src.backtesting.strategies import breakout, mean_reversion, momentum
+from src.backtesting.strategies import (
+    bollinger,
+    breakout,
+    ema_cross,
+    macd,
+    mean_reversion,
+    momentum,
+    rsi_reversion,
+)
 
 GENERATED_DIR = Path(__file__).parent / "generated"
 
@@ -19,6 +27,10 @@ SIGNAL_FUNCS: dict[str, tuple[Callable, dict]] = {
     "mean_reversion": (mean_reversion.signals, mean_reversion.MR_DEFAULTS),
     "momentum": (momentum.signals, momentum.MOMENTUM_DEFAULTS),
     "breakout": (breakout.signals, breakout.BREAKOUT_DEFAULTS),
+    "rsi_reversion": (rsi_reversion.signals, rsi_reversion.RSI_DEFAULTS),
+    "bollinger": (bollinger.signals, bollinger.BOLLINGER_DEFAULTS),
+    "ema_cross": (ema_cross.signals, ema_cross.EMA_CROSS_DEFAULTS),
+    "macd": (macd.signals, macd.MACD_DEFAULTS),
 }
 
 # name -> optuna suggestion callable
@@ -35,6 +47,24 @@ SEARCH_SPACES: dict[str, Callable] = {
     "breakout": lambda t: {
         "entry_window": t.suggest_int("entry_window", 12, 72),
         "exit_window": t.suggest_int("exit_window", 6, 48),
+    },
+    "rsi_reversion": lambda t: {
+        "window": t.suggest_int("window", 7, 30),
+        "oversold": t.suggest_float("oversold", 15.0, 35.0),
+        "overbought": t.suggest_float("overbought", 50.0, 70.0),
+    },
+    "bollinger": lambda t: {
+        "window": t.suggest_int("window", 10, 60),
+        "k": t.suggest_float("k", 1.0, 3.0),
+    },
+    "ema_cross": lambda t: {
+        "fast": t.suggest_int("fast", 5, 30),
+        "slow": t.suggest_int("slow", 20, 80),
+    },
+    "macd": lambda t: {
+        "fast": t.suggest_int("fast", 5, 20),
+        "slow": t.suggest_int("slow", 20, 60),
+        "signal": t.suggest_int("signal", 5, 15),
     },
 }
 

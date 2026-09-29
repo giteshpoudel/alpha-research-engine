@@ -10,7 +10,7 @@ An autonomous quantitative research and portfolio analysis system for crypto mar
 - **Scores** every post's sentiment (−1…+1) with embedding-distance against bullish/bearish anchors, using a local Ollama model — deterministic, free, no API keys
 - **Aggregates** rolling metrics (5m/1h/24h): sentiment polarity index, mention velocity, engagement spikes per ticker
 - **Backfills** historical social/news discussion (Hacker News via Algolia, archived to 2006, with real engagement) to extend sentiment analysis before live collection began
-- **Backtests** strategies (Mean Reversion, Momentum, Breakout) on years of data with a strict in-sample/out-of-sample split, and stores results + equity curves. The optimizer assigns a strategy per symbol (price bucket / meme category) and tunes it; Funding-Rate Carry and Sentiment-Momentum are retained for research only (see Notes)
+- **Backtests** seven built-in strategies (mean-reversion, momentum, breakout, RSI, Bollinger, EMA-cross, MACD) plus sandboxed agent-generated strategies, with a strict in-sample/out-of-sample split; the optimizer assigns and tunes a strategy per symbol, and a parallel batch tuner tests all strategy×symbol combos across CPU cores. Funding-Rate Carry and Sentiment-Momentum are retained for research only (see Notes)
 - **Forward-tests** the tuned Mean Reversion strategy on live data as a paper-trading account (independent $1 sleeve per symbol), surfaced in a dashboard view
 - **Automates research:** Optuna walk-forward tuning, a LangGraph risk/macro/report agent pipeline that also appends deterministic paper-trading and sentiment-signal sections, and a monitoring dashboard
 
@@ -130,7 +130,7 @@ python -m src.research.signal_eval --no-store  # print only
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (275 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (277 tests; integration tests need the Docker stack up).
 
 ## How it works
 
@@ -154,7 +154,8 @@ src/
                 # multi-LLM clients, proposals, continuous loop, sandboxed strategy synthesis
 config/         # launchd plists: stack (login + 30 min), dashboard (always-on),
                 # pipeline (5 min), backfill (daily), hackernews (daily), paper (hourly),
-                # retune (monthly), signal_eval + report (daily), optimizer (continuous)
+                # retune (monthly), signal_eval + report (daily), optimizer (continuous),
+                # batch tuner (every 30 min, parallel across cores)
 docs/           # blueprint + design specs + implementation plans
 tests/          # 141 tests: unit + integration against live services
 ```

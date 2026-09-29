@@ -77,9 +77,29 @@ def test_breakout_signals():
     assert exits.iloc[3]     # 1 breaks the prior 2-bar low (2)
 
 
+BUILTINS = {"mean_reversion", "momentum", "breakout", "rsi_reversion",
+            "bollinger", "ema_cross", "macd"}
+
+
 def test_registry_names_and_defaults():
     from src.backtesting.strategies import registry
 
-    assert set(registry.STRATEGY_NAMES) == {"mean_reversion", "momentum", "breakout"}
+    assert BUILTINS <= set(registry.STRATEGY_NAMES)
     assert registry.defaults("momentum")["window"] == 24
-    assert set(registry.SEARCH_SPACES) == set(registry.STRATEGY_NAMES)
+    assert BUILTINS <= set(registry.SEARCH_SPACES)
+
+
+def test_new_strategies_return_bool_series():
+    from src.backtesting.strategies import bollinger, ema_cross, macd, rsi_reversion
+
+    fall = _series([100.0 - i for i in range(40)])
+    for signals in (rsi_reversion.signals, bollinger.signals,
+                    ema_cross.signals, macd.signals):
+        entries, exits = signals(fall)
+        assert entries.dtype == bool and exits.dtype == bool
+        assert len(entries) == 40
+
+    # a clear trend reversal produces an EMA-cross entry
+    rising = _series([1.0] * 20 + [2.0] * 20)
+    entries, _ = ema_cross.signals(rising, fast=5, slow=15)
+    assert entries.any()

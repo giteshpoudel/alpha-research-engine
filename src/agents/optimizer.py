@@ -45,9 +45,9 @@ _PLANNER_SYSTEM = (
     '"kind":"data"|"api"|"change","title":"<short>",'
     '"justification":"<why it should improve profit>","expected_impact":"<estimate>"}\n'
     '5) do nothing: {"action":"none"}\n'
-    "Strategies available: the built-ins (mean_reversion, momentum, breakout) plus "
-    "any generated ones in \"strategies\". Match style to the symbol (momentum/"
-    "breakout for trending majors; mean_reversion for choppy/penny/meme names). "
+    "Strategies available: everything listed in \"strategies\" (built-ins plus any "
+    "generated). Match style to the symbol (trend/momentum for trending majors; "
+    "mean-reversion styles for choppy/penny/meme names). "
     "Prefer propose_params for small tweaks; switch_strategy when another existing "
     "strategy fits better; add_strategy when a genuinely new idea is warranted. "
     "Use request ONLY when new data/APIs or a major change is the real blocker."
