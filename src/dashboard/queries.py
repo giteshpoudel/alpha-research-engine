@@ -488,3 +488,37 @@ def signal_results(client, db: str | None = None) -> list[dict]:
                   "tstat", "insufficient", "detail", "computed_at"), row))
         for row in rows
     ]
+
+
+# ---------- Funding carry & microstructure ----------
+
+
+def carry_summary(client, db: str | None = None) -> list[dict]:
+    """Realised delta-neutral carry equity per symbol (strategy 'funding_carry')."""
+    rows = client.query(
+        f"""
+        SELECT symbol, count() AS bars, argMin(equity, ts) AS start_equity,
+               argMax(equity, ts) AS end_equity, min(ts) AS first_ts, max(ts) AS last_ts
+        FROM {_db(db)}.paper_equity FINAL
+        WHERE strategy = 'funding_carry'
+        GROUP BY symbol ORDER BY symbol
+        """
+    ).result_rows
+    out = []
+    for symbol, bars, start, end, first, last in rows:
+        total = (float(end) / float(start) - 1.0) if float(start) else 0.0
+        out.append({"symbol": symbol, "bars": bars, "start_equity": start,
+                    "end_equity": end, "total_return": total,
+                    "first_ts": first, "last_ts": last})
+    return out
+
+
+def micro_coverage(client, db: str | None = None) -> dict:
+    """Row counts / span for the forward-collected microstructure tables."""
+    def _stat(table: str):
+        row = client.query(
+            f"SELECT count() AS rows, uniqExact(symbol) AS symbols, "
+            f"minOrNull(ts) AS first_ts, maxOrNull(ts) AS last_ts FROM {_db(db)}.{table}"
+        ).result_rows[0]
+        return {"rows": row[0], "symbols": row[1], "first_ts": row[2], "last_ts": row[3]}
+    return {"order_book": _stat("order_book_snapshots"), "trades": _stat("market_trades")}

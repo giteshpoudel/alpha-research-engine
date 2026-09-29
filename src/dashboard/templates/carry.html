@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Funding Carry{% endblock %}
+{% block content %}
+<h1>Funding Carry (delta-neutral)</h1>
+<p class="muted">Long spot + short perp, regime-guarded. Equity is additive from 1.0.</p>
+<table>
+  <thead>
+    <tr><th>Symbol</th><th>Bars</th><th>Start</th><th>End</th><th>Return</th><th>From</th><th>To</th></tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.symbol }}</td>
+      <td>{{ r.bars }}</td>
+      <td>{{ '%.4f'|format(r.start_equity) }}</td>
+      <td>{{ '%.4f'|format(r.end_equity) }}</td>
+      <td>{{ '%.1f'|format(r.total_return * 100) }}%</td>
+      <td>{{ r.first_ts|pacific }}</td>
+      <td>{{ r.last_ts|pacific }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if not rows %}<p>No carry paper rows yet.</p>{% endif %}
+{% endblock %}

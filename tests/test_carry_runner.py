@@ -3,6 +3,14 @@ import pytest
 from src.ingestion.schemas import database_name, get_clickhouse_client
 from src.paper import carry_runner
 
+TEST_STRATEGY = "TEST_funding_carry"
+
+
+@pytest.fixture(autouse=True)
+def _isolate(monkeypatch):
+    # Never touch real 'funding_carry' production rows from tests.
+    monkeypatch.setattr(carry_runner, "CARRY_STRATEGY", TEST_STRATEGY)
+
 
 @pytest.fixture
 def ch_client():
@@ -10,7 +18,7 @@ def ch_client():
     yield c
     c.command(
         f"ALTER TABLE {database_name()}.paper_equity DELETE "
-        "WHERE strategy = 'funding_carry'",
+        f"WHERE strategy = '{TEST_STRATEGY}'",
         settings={"mutations_sync": 1},
     )
 
@@ -23,7 +31,7 @@ def test_carry_replay_is_idempotent(ch_client):
     rows = ch_client.query(
         f"SELECT count(), min(equity), max(equity) "
         f"FROM {database_name()}.paper_equity FINAL "
-        "WHERE strategy = 'funding_carry' AND symbol = 'BTC'"
+        f"WHERE strategy = '{TEST_STRATEGY}' AND symbol = 'BTC'"
     ).result_rows[0]
     assert rows[0] == n1
     assert rows[1] >= 0.0
@@ -39,6 +47,6 @@ def test_carry_equity_accumulates_for_positive_funding(ch_client):
     first, last = ch_client.query(
         f"SELECT argMin(equity, ts), argMax(equity, ts) "
         f"FROM {database_name()}.paper_equity FINAL "
-        "WHERE strategy = 'funding_carry' AND symbol = 'BTC'"
+        f"WHERE strategy = '{TEST_STRATEGY}' AND symbol = 'BTC'"
     ).result_rows[0]
     assert last > first  # net-positive funding over the window

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Microstructure{% endblock %}
+{% block content %}
+<h1>Microstructure coverage</h1>
+<p class="muted">Forward-collected (no historical L2/tape). Evaluated once it accumulates.</p>
+<table>
+  <thead>
+    <tr><th>Table</th><th>Rows</th><th>Symbols</th><th>From</th><th>To</th></tr>
+  </thead>
+  <tbody>
+    {% for name, s in coverage.items() %}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ s.rows }}</td>
+      <td>{{ s.symbols }}</td>
+      <td>{{ s.first_ts|pacific }}</td>
+      <td>{{ s.last_ts|pacific }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

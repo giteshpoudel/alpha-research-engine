@@ -306,4 +306,35 @@ def create_app() -> FastAPI:
             for row in queries.signal_results(client, db=db)
         ]
 
+    @app.get("/carry", response_class=HTMLResponse)
+    def carry_page(request: Request):
+        client, db = _conn()
+        return templates.TemplateResponse(
+            request, "carry.html",
+            {"request": request, "active": "carry",
+             "rows": _fmt_rows(queries.carry_summary(client, db=db))},
+        )
+
+    @app.get("/api/carry")
+    def api_carry():
+        client, db = _conn()
+        return [
+            {k: (str(v) if hasattr(v, "isoformat") else v) for k, v in row.items()}
+            for row in queries.carry_summary(client, db=db)
+        ]
+
+    @app.get("/micro", response_class=HTMLResponse)
+    def micro_page(request: Request):
+        client, db = _conn()
+        return templates.TemplateResponse(
+            request, "micro.html",
+            {"request": request, "active": "micro",
+             "coverage": queries.micro_coverage(client, db=db)},
+        )
+
+    @app.get("/api/micro")
+    def api_micro():
+        client, db = _conn()
+        return _jsonable(queries.micro_coverage(client, db=db))
+
     return app
