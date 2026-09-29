@@ -72,6 +72,40 @@ ORDER BY (exchange, symbol, ts)
 
 # published_at is the post's own publication time so backtests never see
 # future social data. sentiment_score stays NULL until the Phase 2 worker fills it.
+# Top-of-book microstructure snapshots (forward-collected; no historical API).
+_ORDER_BOOK_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.order_book_snapshots
+(
+    exchange LowCardinality(String),
+    symbol String,
+    ts DateTime64(3),
+    best_bid Float64,
+    best_ask Float64,
+    bid_depth Float64,
+    ask_depth Float64,
+    imbalance Float64,
+    spread_bps Float64
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (exchange, symbol, ts)
+"""
+
+# Public trade tape, keyed by venue trade id so re-fetching is idempotent.
+_MARKET_TRADES_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.market_trades
+(
+    exchange LowCardinality(String),
+    symbol String,
+    trade_id UInt64,
+    ts DateTime64(3),
+    price Float64,
+    qty Float64,
+    is_buyer_maker UInt8
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (exchange, symbol, trade_id)
+"""
+
 _SENTIMENT_POSTS_DDL = """
 CREATE TABLE IF NOT EXISTS {db}.sentiment_posts
 (
@@ -550,7 +584,8 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
     if legacy_tuned:
         client.command(f"RENAME TABLE {db}.tuned_params TO {db}.tuned_params_legacy")
 
-    for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
+    for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _ORDER_BOOK_DDL, _MARKET_TRADES_DDL,
+                _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
                 _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL,
                 _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL, _PAPER_CONTROLS_DDL,
                 _SIGNAL_EVAL_DDL, _SYMBOL_METADATA_DDL, _AGENT_RUNS_DDL, _AGENT_STEPS_DDL,
