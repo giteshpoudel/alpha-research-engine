@@ -136,6 +136,44 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
     return record, folds
 
 
+def fit_grid(ch_client, strategy: str, symbol: str, fee: float = DEFAULT_FEE,
+             is_start: datetime = _IS_START, is_end_exclusive: datetime = _IS_END_EXCLUSIVE
+             ) -> tuple[dict, list]:
+    """Fast walk-forward tuning by scanning a coarse param grid per fold."""
+    base_strategy = strategy.removeprefix("TEST_")
+    grid = registry.grid(base_strategy)
+    if not grid:
+        raise ValueError(f"no grid for {base_strategy}")
+    folds = walk_forward_folds(is_start, is_end_exclusive)
+    fold_params, fold_train, fold_val = [], [], []
+    for train_start, _, val_start, val_end in folds:
+        try:
+            train_data = _load_train_data(ch_client, base_strategy, symbol, train_start, val_start)
+            val_data = _load_train_data(ch_client, base_strategy, symbol, val_start, val_end)
+        except ValueError:
+            continue
+        best, best_score = None, float("-inf")
+        for params in grid:
+            score = _run(train_data, base_strategy, params, fee).sharpe
+            if score > best_score:
+                best, best_score = params, score
+        if best is None:
+            continue
+        fold_params.append(best)
+        fold_train.append(best_score)
+        fold_val.append(float(_run(val_data, base_strategy, best, fee).sharpe))
+    if not fold_params:
+        raise ValueError(f"no tunable folds for {strategy} {symbol}")
+    index = max(range(len(fold_params)), key=lambda i: fold_val[i])
+    record = {
+        "params": fold_params[index],
+        "train_sharpe": fold_train[index],
+        "validation_sharpe": sum(fold_val) / len(fold_val),
+        "folds": len(fold_params),
+    }
+    return record, folds
+
+
 def publish(ch_client, strategy: str, symbol: str, record: dict, valid_from: datetime) -> None:
     """Insert a versioned tuned_params row."""
     ch_client.insert(

@@ -92,6 +92,17 @@ def test_load_train_data_is_cached():
     assert first is second  # cache hit avoids a second ClickHouse query
 
 
+def test_fit_grid_returns_a_grid_point():
+    from src.backtesting.strategies.registry import GRIDS
+    from src.meta_learning.tuner import fit_grid
+
+    ch = get_clickhouse_client()
+    record, folds = fit_grid(ch, "mean_reversion", "BTC")
+    assert record["params"] in GRIDS["mean_reversion"]
+    assert record["folds"] >= 1
+    assert folds
+
+
 def test_validate_params_on_one_fold():
     from src.backtesting.strategies.mean_reversion import MR_DEFAULTS
     from src.meta_learning.tuner import validate_params

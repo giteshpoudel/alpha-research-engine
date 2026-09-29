@@ -28,27 +28,35 @@ from src.meta_learning.tuner import (
 )
 
 
-def _tune_combo(args: tuple[str, str, int]) -> dict:
+def _tune_combo(args: tuple[str, str, int, str]) -> dict:
     """Worker: tune one combo and validate candidate vs incumbent on the same folds."""
-    strategy, symbol, n_trials = args
+    strategy, symbol, n_trials, method = args
     from src.ingestion.schemas import get_clickhouse_client
     from src.meta_learning.params import get_tuned_params
-    from src.meta_learning.tuner import fit, validate_params
+    from src.meta_learning.tuner import fit, fit_grid, validate_params
 
     ch = get_clickhouse_client()
-    record, folds = fit(ch, strategy, symbol, n_trials=n_trials)
-    candidate_val = validate_params(ch, strategy, symbol, record["params"], folds)
-    incumbent = get_tuned_params(ch, strategy, symbol)
-    incumbent_val = (validate_params(ch, strategy, symbol, incumbent, folds)
-                     if incumbent else None)
-    return {"strategy": strategy, "symbol": symbol, "params": record["params"],
-            "folds": record["folds"], "candidate_val": candidate_val,
-            "incumbent_val": incumbent_val}
+    try:
+        if method == "grid":
+            record, folds = fit_grid(ch, strategy, symbol)
+        else:
+            record, folds = fit(ch, strategy, symbol, n_trials=n_trials)
+        candidate_val = validate_params(ch, strategy, symbol, record["params"], folds)
+        incumbent = get_tuned_params(ch, strategy, symbol)
+        incumbent_val = (validate_params(ch, strategy, symbol, incumbent, folds)
+                         if incumbent else None)
+        return {"strategy": strategy, "symbol": symbol, "params": record["params"],
+                "folds": record["folds"], "candidate_val": candidate_val,
+                "incumbent_val": incumbent_val}
+    except Exception as exc:  # one bad combo (e.g. no data) must not kill the batch
+        return {"strategy": strategy, "symbol": symbol, "params": None,
+                "folds": 0, "candidate_val": None, "incumbent_val": None,
+                "error": str(exc)}
 
 
 def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 30,
               workers: int | None = None, margin: float = DEFAULT_ADOPT_MARGIN,
-              use_lock: bool = True, prune: bool = True) -> dict:
+              use_lock: bool = True, prune: bool = True, method: str = "optuna") -> dict:
     from src.agents import governor
     from src.meta_learning import performance
 
@@ -68,7 +76,8 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
     def _run_pool() -> list[dict]:
         out: list[dict] = []
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            for result in pool.map(_tune_combo, [(s, sym, n_trials) for s, sym in combos]):
+            for result in pool.map(
+                    _tune_combo, [(s, sym, n_trials, method) for s, sym in combos]):
                 out.append(result)
         return out
 
@@ -83,7 +92,7 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
 
     adopted = 0
     for res in results:
-        if res["candidate_val"] is None:
+        if res.get("error") or res["candidate_val"] is None:
             continue
         if not adopt_candidate(res["candidate_val"], res["incumbent_val"], margin=margin):
             continue
@@ -114,6 +123,7 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Parallel batch tuning (strategy x symbol)")
     parser.add_argument("--trials", type=int, default=30)
+    parser.add_argument("--method", choices=["optuna", "grid"], default="optuna")
     parser.add_argument("--workers", type=int, default=None)
     parser.add_argument("--symbols", default="all")
     parser.add_argument("--strategies", default="all")
@@ -126,7 +136,8 @@ def main(argv: list[str] | None = None) -> None:
     combos = [(s, sym) for s in strategies for sym in symbols]
     print(f"batch: {len(combos)} combos x {args.trials} trials "
           f"(workers={args.workers or min(8, max(1, (os.cpu_count() or 2) - 1))})")
-    result = run_batch(ch, combos=combos, n_trials=args.trials, workers=args.workers)
+    result = run_batch(ch, combos=combos, n_trials=args.trials, workers=args.workers,
+                       method=args.method)
     print(f"batch: adopted {result['adopted']}/{result['combos']}")
 
 

@@ -89,6 +89,13 @@ def test_registry_names_and_defaults():
     assert BUILTINS <= set(registry.SEARCH_SPACES)
 
 
+def test_registry_has_grids():
+    from src.backtesting.strategies import registry
+
+    for name in BUILTINS:
+        assert registry.grid(name), f"no grid for {name}"
+
+
 def test_new_strategies_return_bool_series():
     from src.backtesting.strategies import bollinger, ema_cross, macd, rsi_reversion
 

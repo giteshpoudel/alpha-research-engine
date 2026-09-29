@@ -69,7 +69,28 @@ SEARCH_SPACES: dict[str, Callable] = {
 }
 
 # Mutable list so importers that bound it keep seeing newly loaded strategies.
+# Coarse param grids for fast vectorized sweeps (much faster than Optuna for
+# grid-style strategies; used by tuner.fit_grid / batch --method grid).
+GRIDS: dict[str, list[dict]] = {
+    "mean_reversion": [{"window": w, "z_entry": ze, "z_exit": 0.0}
+                       for w in (12, 24, 36, 48, 72)
+                       for ze in (-1.0, -1.5, -2.0, -2.5, -3.0)],
+    "momentum": [{"window": w, "threshold": 0.0} for w in (6, 12, 24, 48, 72)],
+    "breakout": [{"entry_window": e, "exit_window": max(6, e // 2)}
+                 for e in (12, 24, 48, 72)],
+    "rsi_reversion": [{"window": w, "oversold": o, "overbought": 60.0}
+                      for w in (7, 14, 21) for o in (20.0, 30.0)],
+    "bollinger": [{"window": w, "k": k} for w in (10, 20, 40) for k in (1.5, 2.0, 2.5)],
+    "ema_cross": [{"fast": f, "slow": s} for f in (5, 10, 20) for s in (30, 50, 80)],
+    "macd": [{"fast": f, "slow": s, "signal": 9}
+             for f in (8, 12, 16) for s in (21, 26, 35)],
+}
+
 STRATEGY_NAMES: list[str] = list(SIGNAL_FUNCS)
+
+
+def grid(strategy: str) -> list[dict]:
+    return GRIDS.get(strategy, [])
 
 
 def defaults(strategy: str) -> dict:

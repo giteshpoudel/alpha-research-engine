@@ -27,7 +27,7 @@ def test_collect_risk_data(ch_client):
     assert all(v["ann_vol"] > 0 for v in data["top_volatile"])
     states = {s["state"] for s in data["signal_states"]}
     assert states <= {"in", "out"}
-    assert len(data["signal_states"]) == 12
+    assert len(data["signal_states"]) >= 12  # universe can grow (meme/penny additions)
     for item in data["tuned_drawdowns"]:
         assert set(item) == {"symbol", "max_dd"}
 
