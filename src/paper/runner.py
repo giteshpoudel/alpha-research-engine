@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from src.backtesting.data import WINDOWS, load_ohlcv
-from src.backtesting.fees import fee_for_strategy
+from src.backtesting.fees import fee_for_symbol
 from src.backtesting.runner import DEFAULT_FEE
 from src.backtesting.strategies import registry
 from src.ingestion.schemas import get_clickhouse_client
@@ -46,8 +46,8 @@ def _step_delta(interval: str) -> timedelta:
     return _INTERVAL_DELTA.get(interval, timedelta(hours=1))
 
 
-def _fee_for(requested: float | None, strategy: str) -> float:
-    return fee_for_strategy(strategy) if requested is None else requested
+def _fee_for(requested: float | None, client, symbol: str) -> float:
+    return fee_for_symbol(client, symbol) if requested is None else requested
 
 
 def _strategy_for(client, requested: str, symbol: str) -> str:
@@ -244,7 +244,7 @@ def main(argv: list[str] | None = None) -> None:
             try:
                 strategy = _strategy_for(client, args.strategy, symbol)
                 n = replay(client, strategy, symbol, start, end,
-                           fee=_fee_for(args.fee, strategy))
+                           fee=_fee_for(args.fee, client, symbol))
                 print(f"paper replay {symbol} [{strategy}]: {n} bars")
             except Exception as exc:
                 print(f"paper replay {symbol}: FAILED: {exc}")
@@ -257,7 +257,7 @@ def main(argv: list[str] | None = None) -> None:
     for symbol in symbols:
         try:
             strategy = _strategy_for(client, args.strategy, symbol)
-            n = step_forward(client, strategy, symbol, fee=_fee_for(args.fee, strategy))
+            n = step_forward(client, strategy, symbol, fee=_fee_for(args.fee, client, symbol))
             print(f"paper step {symbol} [{strategy}]: {n} bars")
         except Exception as exc:
             print(f"paper step {symbol}: FAILED: {exc}")

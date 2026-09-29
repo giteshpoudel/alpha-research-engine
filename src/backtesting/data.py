@@ -54,6 +54,11 @@ def _pick_ohlcv_exchange(ch_client, symbol: str) -> str:
     return ""
 
 
+def exchange_for_symbol(ch_client, symbol: str) -> str:
+    """The single exchange a symbol's market data is sourced from."""
+    return _pick_ohlcv_exchange(ch_client, symbol)
+
+
 def load_ohlcv(ch_client, symbol: str, interval: str = "1h",
                start: datetime | None = None, end: datetime | None = None) -> pd.DataFrame:
     """Load OHLCV for one symbol from a single exchange.

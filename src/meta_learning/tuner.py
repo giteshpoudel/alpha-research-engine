@@ -14,7 +14,7 @@ import optuna
 
 from src.backtesting.data import load_funding, load_ohlcv
 from src.backtesting.engine import run_funding_backtest, run_signal_backtest
-from src.backtesting.fees import fee_for_strategy
+from src.backtesting.fees import fee_for_symbol
 from src.backtesting.strategies import registry
 from src.ingestion.schemas import database_name, get_clickhouse_client
 from src.ingestion.universe import universe
@@ -125,7 +125,7 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
     Does not publish; the caller decides (champion/challenger adoption).
     Intraday strategies use their own (shorter, later) IS window.
     """
-    fee = fee_for_strategy(strategy) if fee is None else fee
+    fee = fee_for_symbol(ch_client, symbol) if fee is None else fee
     folds = (folds_for(strategy) if is_start is None or is_end_exclusive is None
              else walk_forward_folds(is_start, is_end_exclusive))
     fold_params, fold_train_sharpes, fold_val_sharpes = [], [], []
@@ -165,7 +165,7 @@ def fit_grid(ch_client, strategy: str, symbol: str, fee: float | None = None,
              is_start: datetime | None = None, is_end_exclusive: datetime | None = None
              ) -> tuple[dict, list]:
     """Fast walk-forward tuning by scanning a coarse param grid per fold."""
-    fee = fee_for_strategy(strategy) if fee is None else fee
+    fee = fee_for_symbol(ch_client, symbol) if fee is None else fee
     grid = registry.grid(strategy)
     if not grid:
         raise ValueError(f"no grid for {strategy}")
@@ -215,7 +215,7 @@ def publish(ch_client, strategy: str, symbol: str, record: dict, valid_from: dat
 def validate_params(ch_client, strategy: str, symbol: str, params: dict,
                     folds: list, fee: float | None = None) -> float | None:
     """Mean validation Sharpe of a fixed param set over the given folds."""
-    fee = fee_for_strategy(strategy) if fee is None else fee
+    fee = fee_for_symbol(ch_client, symbol) if fee is None else fee
     values = []
     for _, _, val_start, val_end in folds:
         try:
@@ -229,7 +229,7 @@ def validate_params(ch_client, strategy: str, symbol: str, params: dict,
 def trade_edge(ch_client, strategy: str, symbol: str, params: dict,
                folds: list | None = None, fee: float | None = None) -> float | None:
     """Mean net-of-fee PnL per trade across folds (min-edge filter input)."""
-    fee = fee_for_strategy(strategy) if fee is None else fee
+    fee = fee_for_symbol(ch_client, symbol) if fee is None else fee
     folds = folds if folds is not None else folds_for(strategy)
     edges = []
     for _, _, val_start, val_end in folds:

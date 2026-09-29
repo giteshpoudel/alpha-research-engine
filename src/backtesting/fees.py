@@ -1,28 +1,47 @@
-"""Per-interval fee model.
+"""Fee model: per-exchange maker/taker fees, env-overridable.
 
-Intraday strategies trade far more often, so a flat 0.1%/side fee makes them
-unviable by construction. Fees are per-interval and env-overridable
-(``FEE_5M``, ``FEE_1H``, ``FEE_1D``, or ``DEFAULT_FEE``); the 5m default is a
-maker-like 2 bps.
+Real retail base-tier fees:
+
+- Binance.US: maker 0.00%, taker 0.02%
+- Coinbase:  maker 0.40%, taker 0.60%
+
+A symbol's fee is resolved from the exchange its market data comes from.
+``FEE_MODE`` selects maker/taker (default ``taker`` — signal strategies
+enter at market). Any rate can be overridden with
+``FEE_<EXCHANGE>_<MODE>`` (e.g. ``FEE_COINBASE_TAKER=0.005``).
 """
 
 from __future__ import annotations
 
 import os
 
-from src.backtesting.strategies.registry import interval_of
+EXCHANGE_FEES = {
+    "binance_us": {"maker": 0.0000, "taker": 0.0002},
+    "coinbase": {"maker": 0.0040, "taker": 0.0060},
+}
+_FALLBACK = {"maker": 0.0000, "taker": 0.0010}
 
-_DEFAULTS = {"5m": 0.0002, "1h": 0.001, "1d": 0.001}
+
+def fee_mode() -> str:
+    return os.environ.get("FEE_MODE", "taker")
+
+
+def fee_for_exchange(exchange: str, mode: str | None = None) -> float:
+    mode = mode or fee_mode()
+    env = os.environ.get(f"FEE_{exchange.upper()}_{mode.upper()}")
+    if env is not None:
+        return float(env)
+    return EXCHANGE_FEES.get(exchange, _FALLBACK).get(mode, _FALLBACK[mode])
 
 
 def fee_for_interval(interval: str) -> float:
     env = os.environ.get(f"FEE_{interval.upper()}")
     if env is not None:
         return float(env)
-    if interval in _DEFAULTS:
-        return _DEFAULTS[interval]
     return float(os.environ.get("DEFAULT_FEE", "0.001"))
 
 
-def fee_for_strategy(strategy: str) -> float:
-    return fee_for_interval(interval_of(strategy))
+def fee_for_symbol(ch_client, symbol: str, mode: str | None = None) -> float:
+    from src.backtesting.data import exchange_for_symbol
+
+    return fee_for_exchange(exchange_for_symbol(ch_client, symbol), mode)
