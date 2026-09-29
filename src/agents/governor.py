@@ -21,13 +21,16 @@ _LOCK_PATH = _LOCK_DIR / ".heavy.lock"
 def heavy(label: str = "heavy"):
     """Yield True if we acquired the compute lock, False if it's busy."""
     _LOCK_DIR.mkdir(exist_ok=True)
-    handle = open(_LOCK_PATH, "w")
+    # Open without truncating so a waiter doesn't clobber the holder's label.
+    handle = open(_LOCK_PATH, "a")
     try:
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             yield False
             return
+        handle.seek(0)
+        handle.truncate()
         handle.write(f"{label} pid={os.getpid()} {datetime.now(timezone.utc).isoformat()}\n")
         handle.flush()
         yield True
