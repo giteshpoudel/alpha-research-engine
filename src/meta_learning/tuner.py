@@ -12,6 +12,7 @@ import statistics
 from datetime import datetime, timedelta, timezone
 
 import optuna
+import pandas as pd
 
 from src.meta_learning import selection
 
@@ -175,12 +176,11 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
     folds = (folds_for(strategy) if is_start is None or is_end_exclusive is None
              else walk_forward_folds(is_start, is_end_exclusive))
     fold_params, fold_train_sharpes, fold_val_sharpes = [], [], []
-    val_bars = 0
+    trial_sharpes: list[float] = []
     for train_start, _, val_start, val_end in folds:
         try:
             train_data = _load_train_data(ch_client, strategy, symbol, train_start, val_start)
             val_data = _load_train_data(ch_client, strategy, symbol, val_start, val_end)
-            val_bars += len(val_data)
             study = optuna.create_study(
                 direction="maximize", sampler=optuna.samplers.TPESampler(seed=seed)
             )
@@ -193,6 +193,7 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
             print(f"{strategy} {symbol}: skipping fold "
                   f"{train_start.date()}->{val_end.date()}: {exc}")
             continue
+        trial_sharpes.extend(t.value for t in study.trials if t.value is not None)
         params = dict(study.best_params)
         fold_params.append(params)
         fold_train_sharpes.append(float(study.best_value))
@@ -207,7 +208,10 @@ def fit(ch_client, strategy: str, symbol: str, n_trials: int = 60,
         "validation_sharpe": sum(fold_val_sharpes) / len(fold_val_sharpes),
         "folds": len(fold_params),
     }
-    _attach_dsr(record, strategy, fold_val_sharpes, n_trials, val_bars)
+    pooled = _pooled_val_returns(ch_client, strategy, symbol, record["params"],
+                                 folds, fee, taker_fee)
+    _attach_dsr(record, strategy, pooled, n_trials,
+                _trial_sr_std(strategy, trial_sharpes))
     return record, folds
 
 
@@ -222,17 +226,17 @@ def fit_grid(ch_client, strategy: str, symbol: str, fee: float | None = None,
     folds = (folds_for(strategy) if is_start is None or is_end_exclusive is None
              else walk_forward_folds(is_start, is_end_exclusive))
     fold_params, fold_train, fold_val = [], [], []
-    val_bars = 0
+    grid_scores: list[float] = []
     for train_start, _, val_start, val_end in folds:
         try:
             train_data = _load_train_data(ch_client, strategy, symbol, train_start, val_start)
             val_data = _load_train_data(ch_client, strategy, symbol, val_start, val_end)
-            val_bars += len(val_data)
         except ValueError:
             continue
         best, best_score = None, float("-inf")
         for params in grid:
             score = _run(train_data, strategy, params, fee, taker_fee).sharpe
+            grid_scores.append(float(score))
             if score > best_score:
                 best, best_score = params, score
         if best is None:
@@ -249,7 +253,10 @@ def fit_grid(ch_client, strategy: str, symbol: str, fee: float | None = None,
         "validation_sharpe": sum(fold_val) / len(fold_val),
         "folds": len(fold_params),
     }
-    _attach_dsr(record, strategy, fold_val, len(grid), val_bars)
+    pooled = _pooled_val_returns(ch_client, strategy, symbol, record["params"],
+                                 folds, fee, taker_fee)
+    _attach_dsr(record, strategy, pooled, len(grid),
+                _trial_sr_std(strategy, grid_scores))
     return record, folds
 
 
@@ -297,16 +304,45 @@ def trade_edge(ch_client, strategy: str, symbol: str, params: dict,
 _PERIODS_PER_YEAR = {"5m": 105120, "1h": 8760, "1d": 365, "24h": 365}
 
 
-def _attach_dsr(record: dict, strategy: str, fold_val_sharpes: list,
-                n_trials: int, n_obs: int) -> dict:
-    """Add multiplicity-aware Deflated Sharpe to a tuning record (research gate)."""
-    ppy = _PERIODS_PER_YEAR.get(registry.interval_of(strategy), 8760)
-    sr = selection.per_bar_sharpe(record["validation_sharpe"], ppy)
-    sr_std = statistics.pstdev(fold_val_sharpes) if len(fold_val_sharpes) > 1 else 0.0
+def _pooled_val_returns(ch_client, strategy: str, symbol: str, params: dict,
+                        folds: list, fee: float, taker_fee: float | None) -> pd.Series:
+    """Per-bar returns of one param set over every validation fold (pooled)."""
+    parts = []
+    for _, _, val_start, val_end in folds:
+        try:
+            data = _load_train_data(ch_client, strategy, symbol, val_start, val_end)
+        except ValueError:
+            continue
+        result = _run(data, strategy, params, fee, taker_fee)
+        parts.append(result.equity_curve.pct_change().dropna())
+    return pd.concat(parts) if parts else pd.Series(dtype=float)
+
+
+def _attach_dsr(record: dict, strategy: str, pooled_returns: pd.Series,
+                n_trials: int, sr_std: float | None = None) -> dict:
+    """Add multiplicity-aware Deflated Sharpe using real return moments.
+
+    ``sr_std`` is the per-bar Sharpe dispersion across trials (the DSR's
+    E[max SR] benchmark); None falls back to |sr|.
+    """
+    n_obs = int(len(pooled_returns))
+    if n_obs < 2:
+        record["dsr"] = None
+        record["n_obs"] = n_obs
+        return record
+    sr, skew, kurt = selection.per_bar_moments(pooled_returns)
     record["dsr"] = selection.deflated_sharpe_ratio(
-        sr, n_trials, n_obs, sr_std=selection.per_bar_sharpe(sr_std, ppy))
+        sr, n_trials, n_obs, skew=skew, kurt=kurt, sr_std=sr_std)
     record["n_obs"] = n_obs
     return record
+
+
+def _trial_sr_std(strategy: str, trial_sharpes: list) -> float | None:
+    """Per-bar std of annualized trial Sharpes (the DSR trial dispersion)."""
+    if len(trial_sharpes) < 2:
+        return None
+    ppy = _PERIODS_PER_YEAR.get(registry.interval_of(strategy), 8760)
+    return selection.per_bar_sharpe(statistics.pstdev(trial_sharpes), ppy)
 
 
 DEFAULT_ADOPT_MARGIN = 0.01

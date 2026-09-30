@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 import pytest
 
 from src.meta_learning import selection
@@ -29,6 +31,15 @@ def test_deflation_lowers_confidence_with_more_trials():
 
 def test_per_bar_sharpe_conversion():
     assert selection.per_bar_sharpe(8760 ** 0.5, 8760) == pytest.approx(1.0)
+
+
+def test_per_bar_moments_on_normal_returns():
+    rng = np.random.default_rng(0)
+    returns = pd.Series(rng.normal(0.0, 1.0, 20000))
+    sr, skew, kurt = selection.per_bar_moments(returns)
+    assert abs(sr) < 0.05
+    assert abs(skew) < 0.1
+    assert abs(kurt - 3.0) < 0.2  # non-excess, normal == 3.0
 
 
 def test_min_dsr_prob_gate(monkeypatch):

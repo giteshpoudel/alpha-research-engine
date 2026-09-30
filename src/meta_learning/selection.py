@@ -33,6 +33,16 @@ def per_bar_sharpe(annualized_sharpe: float, periods_per_year: float) -> float:
     return annualized_sharpe / math.sqrt(periods_per_year)
 
 
+def per_bar_moments(returns) -> tuple[float, float, float]:
+    """(per-bar Sharpe, skew, kurtosis) of a per-bar return Series.
+
+    Kurtosis is non-excess (normal == 3.0), matching the DSR formula.
+    """
+    std = float(returns.std(ddof=0))
+    sr = float(returns.mean() / std) if std > 0 else 0.0
+    return sr, float(returns.skew()), float(returns.kurtosis() + 3.0)
+
+
 def probabilistic_sharpe_ratio(sr: float, n_obs: int, skew: float = 0.0,
                                kurt: float = 3.0) -> float:
     """P(true SR > 0) given the observed per-bar Sharpe and return moments."""
