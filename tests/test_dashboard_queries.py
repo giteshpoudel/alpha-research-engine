@@ -41,6 +41,24 @@ def test_list_runs_and_detail(client):
     assert queries.run_detail(client, "nonexistent-run-id") is None
 
 
+def test_dsr_rejections_counts_events(client):
+    from src.agents.change_log import log
+    from src.ingestion.schemas import database_name
+
+    subject = "TEST_DSR_SUBJECT"
+    log(client, "dsr_rejected", subject=subject, detail={"dsr": 0.5, "min_dsr": 0.95})
+    try:
+        stats = queries.dsr_rejections(client)
+        assert stats["total"] >= 1
+        assert stats["last_24h"] >= 1
+        assert any(r["subject"] == subject for r in stats["recent"])
+    finally:
+        client.command(
+            f"ALTER TABLE {database_name()}.change_log DELETE WHERE subject = '{subject}'",
+            settings={"mutations_sync": 1},
+        )
+
+
 def test_equity_curve_downsampled(client):
     run_id = queries.list_runs(client, "mean_reversion", "BTC")[0]["run_id"]
     points = queries.equity_curve(client, run_id, max_points=500)

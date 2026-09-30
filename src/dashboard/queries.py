@@ -10,6 +10,7 @@ when omitted it falls back to the shared ``database_name()``.
 
 from __future__ import annotations
 
+import json
 import math
 
 import pandas as pd
@@ -447,7 +448,8 @@ def optimizer_overview(client, db: str | None = None, limit: int = 20) -> dict:
         f"SELECT {', '.join(prop_cols)} FROM {dbn}.strategy_proposals FINAL "
         "ORDER BY created_at DESC LIMIT {n:UInt32}", parameters={"n": 10}).result_rows]
 
-    return {"goal": goal, "assignments": assignments, "changes": changes,
+    dsr = dsr_rejections(client, db=db)
+    return {"goal": goal, "assignments": assignments, "changes": changes, "dsr": dsr,
             "runs": runs, "requests": requests_, "proposals": proposals_}
 
 
@@ -511,6 +513,26 @@ def carry_summary(client, db: str | None = None) -> list[dict]:
                     "end_equity": end, "total_return": total,
                     "first_ts": first, "last_ts": last})
     return out
+
+
+def dsr_rejections(client, db: str | None = None, limit: int = 20) -> dict:
+    """How often the Deflated-Sharpe gate blocked an adoption."""
+    dbn = _db(db)
+    total = client.query(
+        f"SELECT count() FROM {dbn}.change_log WHERE event = 'dsr_rejected'"
+    ).result_rows[0][0]
+    last_24h = client.query(
+        f"SELECT count() FROM {dbn}.change_log WHERE event = 'dsr_rejected' "
+        "AND created_at >= now() - INTERVAL 24 HOUR"
+    ).result_rows[0][0]
+    recent = client.query(
+        f"SELECT subject, detail, created_at FROM {dbn}.change_log "
+        "WHERE event = 'dsr_rejected' ORDER BY created_at DESC LIMIT {n:UInt32}",
+        parameters={"n": limit},
+    ).result_rows
+    rows = [{"subject": s, "detail": json.loads(d) if d else {}, "created_at": ts}
+            for s, d, ts in recent]
+    return {"total": total, "last_24h": last_24h, "recent": rows}
 
 
 def micro_coverage(client, db: str | None = None) -> dict:

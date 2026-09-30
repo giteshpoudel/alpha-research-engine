@@ -164,11 +164,16 @@ def _tune_iteration(ch, run, strategy: str, symbol: str, n_trials: int,
         run.step("tune", {"symbol": symbol, "strategy": strategy},
                  {"error": fitted.error})
         return {"action": "none"}
+    from src.agents.change_log import log as log_change
     from src.meta_learning import selection
     if not selection.passes_dsr(fitted.data.get("dsr")):
         run.step("dsr_reject", {"symbol": symbol, "strategy": strategy,
                                 "dsr": fitted.data.get("dsr")},
                  {"action": "none", "reason": "below MIN_DSR_PROB"})
+        log_change(ch, "dsr_rejected", subject=symbol,
+                   detail={"strategy": strategy, "dsr": fitted.data.get("dsr"),
+                           "min_dsr": selection.min_dsr_prob(), "source": "optimizer"},
+                   run_id=run.run_id)
         return {"action": "none", "reason": "dsr_gate"}
     change = {"strategy": strategy, "symbol": symbol, "params": fitted.data["params"]}
     proposal_id = proposals.create_proposal(

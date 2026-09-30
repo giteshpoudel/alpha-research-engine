@@ -14,6 +14,28 @@
 <p class="muted">No goal recorded yet.</p>
 {% endif %}
 
+<h2>DSR adoption gate</h2>
+{% if dsr %}
+<div class="cards">
+  <div class="card"><span>Rejected (total)</span><b>{{ dsr.total }}</b></div>
+  <div class="card"><span>Rejected (24h)</span><b>{{ dsr.last_24h }}</b></div>
+</div>
+{% if dsr.recent %}
+<table>
+  <thead><tr><th>When</th><th>Symbol</th><th>Detail</th></tr></thead>
+  <tbody>
+    {% for r in dsr.recent %}
+    <tr>
+      <td class="muted">{{ r.created_at | pacific }}</td>
+      <td>{{ r.subject }}</td>
+      <td class="mono">{{ r.detail | tojson }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="muted">No DSR-gate rejections yet.</p>{% endif %}
+{% endif %}
+
 <h2>Current assignments</h2>
 <table>
   <thead><tr><th>Symbol</th><th>Strategy</th><th>Category</th><th>Price</th><th>Risk</th></tr></thead>

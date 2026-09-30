@@ -99,6 +99,9 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
             continue
         # Multiplicity gate: reject best-of-many flukes when enabled.
         if not selection.passes_dsr(res.get("dsr")):
+            log_change(ch, "dsr_rejected", subject=res["symbol"],
+                       detail={"strategy": res["strategy"], "dsr": res.get("dsr"),
+                               "min_dsr": selection.min_dsr_prob(), "source": "batch"})
             continue
         publish(ch, res["strategy"], res["symbol"],
                 {"params": res["params"], "train_sharpe": 0.0,
