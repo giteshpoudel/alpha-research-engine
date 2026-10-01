@@ -12,7 +12,7 @@
     <key>RunAtLoad</key>
     <true/>
     <key>StartInterval</key>
-    <integer>1800</integer>
+    <integer>300</integer>
     <key>StandardOutPath</key>
     <string>/Users/giteshpoudel/.local/share/alpha-research/stack.log</string>
     <key>StandardErrorPath</key>
