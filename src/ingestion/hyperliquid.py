@@ -9,16 +9,20 @@ History starts at each coin's listing; empty responses are normal.
 
 from __future__ import annotations
 
+import argparse
 from datetime import datetime, timedelta, timezone
 
 import httpx
 
 from src.ingestion.http import post_with_backoff
 from src.ingestion.market_data import insert_funding, max_ts
+from src.ingestion.schemas import database_name
 from src.ingestion.tickers import TICKER_ALIASES
 
 _INFO_URL = "https://api.hyperliquid.xyz/info"
 _PAGE = 500
+_PERP_COLUMNS = ("exchange", "symbol", "ts", "mark_price", "oracle_price",
+                 "mid_price", "open_interest")
 
 
 def map_funding(coin: str, rec: dict, next_ts: datetime) -> dict:
@@ -86,3 +90,59 @@ def backfill_funding(ch_client, http_client: httpx.Client | None = None,
         if owns_client:
             http_client.close()
     return inserted
+
+
+def map_asset_ctxs(payload: list, coins: tuple[str, ...] | None = None,
+                   ts: datetime | None = None) -> list[dict]:
+    """metaAndAssetCtxs -> perp_marks rows. ``payload`` is [meta, assetCtxs]."""
+    meta, ctxs = payload[0], payload[1]
+    ts = ts or datetime.now(timezone.utc)
+    rows = []
+    for entry, ctx in zip(meta.get("universe", []), ctxs):
+        symbol = entry.get("name")
+        if coins is not None and symbol not in coins:
+            continue
+        rows.append({
+            "exchange": "hyperliquid", "symbol": symbol, "ts": ts,
+            "mark_price": float(ctx.get("markPx") or 0.0),
+            "oracle_price": float(ctx.get("oraclePx") or 0.0),
+            "mid_price": float(ctx.get("midPx") or 0.0),
+            "open_interest": float(ctx.get("openInterest") or 0.0),
+        })
+    return rows
+
+
+def snapshot_perp_marks(ch_client, coins: tuple[str, ...] | None = None,
+                        http_client: httpx.Client | None = None) -> int:
+    """One live perp mark/oracle snapshot for all (or selected) coins."""
+    owns_client = http_client is None
+    http_client = http_client or httpx.Client()
+    try:
+        resp = post_with_backoff(_INFO_URL, json={"type": "metaAndAssetCtxs"},
+                                 client=http_client, timeout=30.0)
+        rows = map_asset_ctxs(resp.json(), coins=coins)
+        if not rows:
+            return 0
+        ch_client.insert(f"{database_name()}.perp_marks",
+                         [[r[c] for c in _PERP_COLUMNS] for r in rows],
+                         column_names=list(_PERP_COLUMNS))
+        return len(rows)
+    finally:
+        if owns_client:
+            http_client.close()
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Hyperliquid perp mark snapshots")
+    parser.add_argument("--snapshot", action="store_true")
+    parser.add_argument("--coins", default=None, help="comma-separated; default all")
+    args = parser.parse_args(argv)
+
+    from src.ingestion.schemas import get_clickhouse_client
+
+    coins = tuple(args.coins.split(",")) if args.coins else tuple(TICKER_ALIASES)
+    print(f"perp_marks inserted: {snapshot_perp_marks(get_clickhouse_client(), coins=coins)}")
+
+
+if __name__ == "__main__":
+    main()
