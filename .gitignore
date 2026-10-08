@@ -16,3 +16,7 @@ keys/
 *.pem
 .env.live
 
+# Agent-generated strategy files are runtime artifacts (also recorded in the
+# generated_strategies table); don't commit the accumulating pile.
+src/backtesting/strategies/generated/
+

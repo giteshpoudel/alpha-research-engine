@@ -38,12 +38,19 @@ def score_run(ch, run_id: str, *, kind: str = "optimizer", adopted: int = 0,
     return score
 
 
-def detect_regression(ch, window: int = 10, factor: float = 0.5) -> dict | None:
-    """Compare the newest half of recent run scores to the older half."""
+def detect_regression(ch, window: int = 10, factor: float = 0.5,
+                      prefix: str | None = None) -> dict | None:
+    """Compare the newest half of recent run scores to the older half.
+
+    ``prefix`` restricts to run_ids starting with it (test isolation).
+    """
+    where, params = "", {"n": window}
+    if prefix:
+        where, params["p"] = "WHERE run_id LIKE {p:String}", f"{prefix}%"
     rows = ch.query(
-        f"SELECT score FROM {database_name()}.agent_run_scores FINAL "
+        f"SELECT score FROM {database_name()}.agent_run_scores FINAL {where} "
         "ORDER BY created_at DESC LIMIT {n:UInt32}",
-        parameters={"n": window},
+        parameters=params,
     ).result_rows
     scores = [float(r[0]) for r in rows]
     if len(scores) < window:
