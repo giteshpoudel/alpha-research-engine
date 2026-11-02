@@ -123,6 +123,44 @@ ENGINE = ReplacingMergeTree
 ORDER BY (exchange, symbol, trade_id)
 """
 
+# Websocket book samples (1/s per instrument): top of book, depth, microprice.
+_BOOK_SAMPLES_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.book_samples
+(
+    exchange LowCardinality(String),
+    symbol LowCardinality(String),
+    ts DateTime64(3),
+    bid_px Float64,
+    bid_qty Float64,
+    ask_px Float64,
+    ask_qty Float64,
+    bid_depth5 Float64,
+    ask_depth5 Float64,
+    bid_depth10 Float64,
+    ask_depth10 Float64,
+    spread_bps Float32,
+    microprice Float64
+)
+ENGINE = ReplacingMergeTree
+PARTITION BY toYYYYMM(ts)
+ORDER BY (exchange, symbol, ts)
+"""
+
+# Breaks in a venue's sequential trade ids seen by the websocket collector.
+_TAPE_GAPS_DDL = """
+CREATE TABLE IF NOT EXISTS {db}.tape_gaps
+(
+    exchange LowCardinality(String),
+    symbol String,
+    detected_at DateTime64(3),
+    from_id UInt64,
+    to_id UInt64,
+    missing UInt64
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (exchange, symbol, from_id)
+"""
+
 _SENTIMENT_POSTS_DDL = """
 CREATE TABLE IF NOT EXISTS {db}.sentiment_posts
 (
@@ -602,7 +640,7 @@ def create_clickhouse_schema(client: ClickHouseClient) -> None:
         client.command(f"RENAME TABLE {db}.tuned_params TO {db}.tuned_params_legacy")
 
     for ddl in (_OHLCV_DDL, _FUNDING_RATES_DDL, _PERP_MARKS_DDL,
-                _ORDER_BOOK_DDL, _MARKET_TRADES_DDL,
+                _ORDER_BOOK_DDL, _MARKET_TRADES_DDL, _BOOK_SAMPLES_DDL, _TAPE_GAPS_DDL,
                 _SENTIMENT_POSTS_DDL, _SENTIMENT_METRICS_DDL,
                 _BACKTEST_RUNS_DDL, _BACKTEST_EQUITY_DDL, _TUNED_PARAMS_DDL, _RESEARCH_REPORTS_DDL,
                 _PAPER_EQUITY_DDL, _PAPER_TRADES_DDL, _PAPER_POSITIONS_DDL, _PAPER_CONTROLS_DDL,

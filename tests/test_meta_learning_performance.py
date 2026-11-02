@@ -27,3 +27,15 @@ def test_refresh_marks_dead_combo(ch):
     )
     assert performance.refresh(ch, min_validation=0.0) >= 1
     assert ("TESTPERF_dead", "BTC") in performance.dead_combos(ch)
+
+
+def test_pick_generated_mixes_proven_and_fresh():
+    from src.meta_learning.performance import pick_generated
+
+    active = ["new3", "new2", "good", "bad", "best", "new1"]  # newest first
+    tuned = {"good": 0.4, "bad": -0.2, "best": 0.9}
+    assert pick_generated(active, tuned, 4) == ["best", "good", "new3", "new2"]
+    assert pick_generated(active, tuned, 1) == ["best"]
+    assert pick_generated(active, tuned, 0) == []
+    # never-tuned backlog drains newest-first; failed ones are not retried
+    assert "bad" not in pick_generated(active, tuned, 10)

@@ -22,11 +22,25 @@ from src.backtesting.strategies.registry import STRATEGY_NAMES
 from src.ingestion.schemas import get_clickhouse_client
 from src.ingestion.universe import universe
 from src.meta_learning import selection
+from src.meta_learning.performance import select_generated
 from src.meta_learning.tuner import (
     DEFAULT_ADOPT_MARGIN,
     adopt_candidate,
     publish,
 )
+
+BUILTIN_STRATEGIES = ("mean_reversion", "momentum", "breakout", "rsi_reversion",
+                      "bollinger", "ema_cross", "macd")
+DEFAULT_MAX_GENERATED = 12
+
+
+def default_strategies(ch, max_generated: int = DEFAULT_MAX_GENERATED) -> list[str]:
+    """Built-ins plus a capped, rotating slice of generated strategies."""
+    try:
+        generated = select_generated(ch, max_generated)
+    except Exception:
+        generated = []
+    return list(BUILTIN_STRATEGIES) + [g for g in generated if g in STRATEGY_NAMES]
 
 
 def _tune_combo(args: tuple[str, str, int, str]) -> dict:
@@ -53,6 +67,8 @@ def _tune_combo(args: tuple[str, str, int, str]) -> dict:
         return {"strategy": strategy, "symbol": symbol, "params": None,
                 "folds": 0, "candidate_val": None, "incumbent_val": None,
                 "error": str(exc)}
+    finally:
+        ch.close()  # one client per combo; leaking them exhausts file handles
 
 
 def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 30,
@@ -63,7 +79,7 @@ def run_batch(ch, combos: list[tuple[str, str]] | None = None, n_trials: int = 3
 
     if combos is None:
         symbols = universe(ch)
-        combos = [(s, sym) for s in STRATEGY_NAMES for sym in symbols]
+        combos = [(s, sym) for s in default_strategies(ch) for sym in symbols]
 
     # Skip combos already known dead.
     try:
@@ -136,14 +152,16 @@ def main(argv: list[str] | None = None) -> None:
                         help="bar interval; non-1h namespaces the strategy (e.g. name@5m)")
     parser.add_argument("--workers", type=int, default=None)
     parser.add_argument("--symbols", default="all")
-    parser.add_argument("--strategies", default="all")
+    parser.add_argument("--strategies", default="all",
+                        help="'all' = built-ins + up to --max-generated generated")
+    parser.add_argument("--max-generated", type=int, default=DEFAULT_MAX_GENERATED)
     args = parser.parse_args(argv)
 
     from src.backtesting.strategies.registry import qualify
 
     ch = get_clickhouse_client()
     symbols = universe(ch) if args.symbols == "all" else tuple(args.symbols.split(","))
-    strategies = (STRATEGY_NAMES if args.strategies == "all"
+    strategies = (default_strategies(ch, args.max_generated) if args.strategies == "all"
                   else tuple(args.strategies.split(",")))
     combos = [(qualify(s, args.interval), sym) for s in strategies for sym in symbols]
     print(f"batch: {len(combos)} combos x {args.trials} trials "

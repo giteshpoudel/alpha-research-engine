@@ -117,6 +117,14 @@ python -m src.agents.optimizer --observe-only      # no LLM/cost
 python -m src.agents.optimizer --loops 2           # observe -> plan -> propose -> gate
 ```
 
+**Microstructure collector** (always-on websocket: full trade tape + 1s book samples with
+microprice, for Binance.US USDT/USD and Kraken USD; gaps in trade ids go to `tape_gaps`):
+
+```bash
+python -m src.ingestion.ws_collector --seconds 60 --dry-run   # smoke test
+python -m src.ingestion.ws_collector                          # run forever
+```
+
 **Signal evaluation** (does the social/news feed predict forward returns?):
 
 ```bash
@@ -130,7 +138,7 @@ python -m src.research.signal_eval --no-store  # print only
 python -m src.dashboard            # http://127.0.0.1:8000
 ```
 
-**Tests:** `python -m pytest tests/ -v` (338 tests; integration tests need the Docker stack up).
+**Tests:** `python -m pytest tests/ -v` (347 tests; integration tests need the Docker stack up and run against the local database using test-only names).
 
 ## How it works
 
@@ -155,9 +163,10 @@ src/
 config/         # launchd plists: stack (login + 30 min), dashboard (always-on),
                 # pipeline (5 min), backfill (daily), hackernews (daily), paper (hourly),
                 # retune (monthly), signal_eval + report (daily), optimizer (continuous),
-                # batch tuner (every 30 min, parallel across cores)
+                # batch tuner (every 30 min, parallel across cores),
+                # websocket microstructure collector (always-on)
 docs/           # blueprint + design specs + implementation plans
-tests/          # 141 tests: unit + integration against live services
+tests/          # unit + integration tests against live services
 ```
 
 ## Roadmap
@@ -178,6 +187,7 @@ tests/          # 141 tests: unit + integration against live services
 
 - Binance.com is geo-restricted in some regions; the backfill uses Binance.US (spot) and Hyperliquid (funding). Funding history starts at each coin's Hyperliquid listing (BTC ≈ May 2023).
 - Funding-rate arb assumes zero basis risk (no perp price series) — documented approximation.
+- Hyperliquid (the perp leg in the carry research) is not available to US users; a US-tradeable carry needs re-research on Coinbase or Kraken Derivatives US funding.
 - Sentiment history is limited to when the pipeline started running; see the dataset roadmap item.
 - **Sentiment signal is weak and treated as research/monitoring only.** Polarity is capped by the embedding model (`nomic-embed-text` maps bullish and bearish crypto text to nearly the same region — anchor cosine 0.83, hand-written bull/bear probes span only ±0.13). Predictive IC is small (24h mean polarity vs 24h forward return: +0.13, p=0.04); contrastive anchors and per-ticker normalization were worse. Attention features (`post_count`) show a small contrarian IC (−0.12 at 4h, p=0.004) but an entry/exit overlay on Mean Reversion was a no-op. Funding-Rate Carry loses to fees.
 

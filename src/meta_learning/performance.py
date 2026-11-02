@@ -84,3 +84,91 @@ def prune_generated(ch) -> list[str]:
         log_change(ch, "strategy_pruned", subject=name, detail={"reason": "dead"})
     load_generated()
     return pruned
+
+
+# --- generated-strategy backlog control -------------------------------------
+# Synthesis can outpace tuning. Without these caps the batch tuner tried every
+# generated strategy at once (31k combos), never finished, and held the compute
+# lock so nothing else could run.
+
+ARCHIVE_DIR = "data/generated_archive"
+
+
+def _active_generated(ch) -> list[tuple[str, datetime]]:
+    return [(r[0], r[1]) for r in ch.query(
+        f"SELECT name, created_at FROM {database_name()}.generated_strategies FINAL "
+        "WHERE status = 'active' ORDER BY created_at DESC"
+    ).result_rows]
+
+
+def _tuned_validation(ch) -> dict[str, float]:
+    """Best latest validation Sharpe per strategy (any symbol)."""
+    return {s: float(v) for s, v in ch.query(
+        f"SELECT strategy, max(v) FROM (SELECT strategy, symbol, "
+        f"argMax(validation_sharpe, valid_from) AS v "
+        f"FROM {database_name()}.tuned_params FINAL GROUP BY strategy, symbol) "
+        "GROUP BY strategy"
+    ).result_rows}
+
+
+def untested_generated(ch) -> list[str]:
+    """Active generated strategies with no tuned_params row yet, newest first."""
+    tuned = _tuned_validation(ch)
+    return [name for name, _ in _active_generated(ch) if name not in tuned]
+
+
+def select_generated(ch, limit: int) -> list[str]:
+    """Generated strategies worth tuning in one batch, at most ``limit``.
+
+    Half the slots go to the best already-tuned ones (positive validation),
+    the rest to the newest untested ones, so the backlog drains steadily.
+    """
+    if limit <= 0:
+        return []
+    return pick_generated([n for n, _ in _active_generated(ch)],
+                          _tuned_validation(ch), limit)
+
+
+def pick_generated(active: list[str], tuned: dict[str, float], limit: int) -> list[str]:
+    """Pure selection: best proven (validation > 0) first, then newest untested."""
+    if limit <= 0:
+        return []
+    proven = sorted((n for n in active if tuned.get(n, 0.0) > 0),
+                    key=lambda n: -tuned[n])[: max(1, limit // 2)]
+    fresh = [n for n in active if n not in tuned]
+    return (proven + fresh)[:limit]
+
+
+def archive_untested(ch, keep: int = 0) -> list[str]:
+    """Move never-tuned generated strategies out of the registry (reversible).
+
+    Files go to ``data/generated_archive`` and the row is marked ``archived``;
+    moving a file back and setting status to ``active`` restores it. The newest
+    ``keep`` untested strategies stay active.
+    """
+    from pathlib import Path
+
+    from src.backtesting.strategies.registry import GENERATED_DIR, load_generated
+
+    archived = untested_generated(ch)[keep:]
+    if not archived:
+        return []
+    archive = Path(ARCHIVE_DIR)
+    archive.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc)
+    cols = ["name", "code", "description", "status", "validation_sharpe", "model",
+            "created_at", "updated_at"]
+    rows = ch.query(
+        f"SELECT {', '.join(cols)} FROM {database_name()}.generated_strategies FINAL "
+        "WHERE name IN {names:Array(String)}", parameters={"names": archived}
+    ).result_rows
+    ch.insert(f"{database_name()}.generated_strategies",
+              [[*r[:3], "archived", *r[4:7], now] for r in rows], column_names=cols)
+    for name in archived:
+        path = GENERATED_DIR / f"{name}.py"
+        if path.exists():
+            path.rename(archive / path.name)
+    log_change(ch, "strategies_archived", subject="generated",
+               detail={"count": len(archived), "reason": "never tuned"})
+    load_generated()
+    return archived

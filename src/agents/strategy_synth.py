@@ -7,6 +7,7 @@ registry (paper-only).
 
 from __future__ import annotations
 
+import os
 import re
 import time
 
@@ -33,8 +34,22 @@ def _extract_code(text: str) -> str:
     return code[min(starts):].strip() if starts else code.strip()
 
 
-def synthesize_batch(ch, n: int = 2, chat_fn=None, model: str = "") -> list[str]:
+def max_untested() -> int:
+    """Synthesis pauses once this many generated strategies await tuning."""
+    return int(os.environ.get("SYNTH_MAX_UNTESTED", "24"))
+
+
+def synthesize_batch(ch, n: int = 2, chat_fn=None, model: str = "",
+                     prefix: str = "gen") -> list[str]:
     """Ask the executor for ``n`` strategy ideas; register the ones that pass."""
+    from src.meta_learning.performance import untested_generated
+
+    # Don't outrun the tuner: pause synthesis while untested strategies pile up.
+    try:
+        if len(untested_generated(ch)) >= max_untested():
+            return []
+    except Exception:
+        pass
     chat_fn = chat_fn or default_chat
     registered: list[str] = []
     for i in range(n):
@@ -42,7 +57,7 @@ def synthesize_batch(ch, n: int = 2, chat_fn=None, model: str = "") -> list[str]
             result = chat_fn("executor", _SYSTEM,
                              f"Strategy idea #{i + 1}: be distinct and simple.")
             code = _extract_code(result.text)
-            name = f"gen{int(time.time())}{i}"
+            name = f"{prefix}{int(time.time())}{i}"
             outcome = register_generated_strategy(
                 ch, name, code, description="agent-synthesized",
                 model=getattr(result, "model", model))
