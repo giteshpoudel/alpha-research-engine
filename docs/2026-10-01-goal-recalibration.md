@@ -80,3 +80,12 @@ mid-single to low-double digits annually, optionally augmented by a hard-won
 directional edge. The honest portfolio expectation today is **~5–15%/yr** —
 good, real, and completely incompatible with "10%/day". This note is the
 baseline every future claim should be measured against.
+
+## 8. Implemented (2026-11-02)
+
+- `src/agents/goals.py`: default daily target = daily equivalent of 10%/yr (0.0261%/day);
+  `raise_goal` capped at 0.10%/day (~44%/yr); stored targets above the cap are clamped.
+- Fixed `daily_profit_pct`: it averaged raw equity across whichever series had a row at
+  each timestamp (14 on the hour, 3 at :15/:30/:45), which produced fake +27% "days" and
+  marked the goal met daily since 2026-10-07. It now compares each active
+  (strategy, symbol) series with its own equity 24h earlier and averages those returns.

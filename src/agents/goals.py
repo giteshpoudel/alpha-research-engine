@@ -1,8 +1,12 @@
 """Daily profit goals and progress for the optimizer.
 
-The optimizer starts from a small positive target and raises it once met, so the
-goal ratchets up over iterations. Progress is measured as the equal-weight
-paper-portfolio return over the trailing 24h.
+Targets follow docs/2026-10-01-goal-recalibration.md: the real goal is ~10%/yr net,
+so the daily target starts at its daily equivalent (~0.026%/day) and can never ratchet
+above 0.10%/day (~44%/yr). The old cap of 10%/day was unreachable and made the
+optimizer chase noise.
+
+Progress is the average trailing-24h return of each active paper series
+(strategy, symbol), each measured against its own equity 24h earlier.
 """
 
 from __future__ import annotations
@@ -12,8 +16,10 @@ from datetime import date, datetime, timedelta, timezone
 from src.agents.change_log import log as log_change
 from src.ingestion.schemas import database_name
 
-DEFAULT_DAILY_GOAL_PCT = 0.10  # percent per day
-MAX_DAILY_GOAL_PCT = 10.0      # never ratchet beyond the live-trading bar
+ANNUAL_TARGET_PCT = 10.0       # evidence-based target (recalibration note, section 4)
+DEFAULT_DAILY_GOAL_PCT = round(((1 + ANNUAL_TARGET_PCT / 100) ** (1 / 365) - 1) * 100, 4)
+MAX_DAILY_GOAL_PCT = 0.10      # ~44%/yr; raise_goal can't drift past this
+_ACTIVE_WITHIN = timedelta(hours=2)  # series with no newer row are stale, skip them
 _LOOKBACK_DAYS = 7
 _LOOKBACK_FRACTION = 0.5
 _GOAL_COLUMNS = ("goal_date", "target_profit_pct", "achieved_profit_pct",
@@ -55,11 +61,19 @@ def _rolling_target(ch, day: date) -> float:
     return round(min(MAX_DAILY_GOAL_PCT, max(DEFAULT_DAILY_GOAL_PCT, target)), 4)
 
 
+def annualized_pct(daily_pct: float) -> float:
+    return ((1 + daily_pct / 100) ** 365 - 1) * 100
+
+
 def ensure_goal(ch, day: date, target: float | None = None) -> dict:
     row = get_goal(ch, day)
     if row is None:
         _write(ch, day, target if target is not None else _rolling_target(ch, day),
                0.0, "pending")
+        row = get_goal(ch, day)
+    elif target is None and float(row["target_profit_pct"]) > MAX_DAILY_GOAL_PCT:
+        # rows written under the old 10%/day cap
+        _write(ch, day, MAX_DAILY_GOAL_PCT, float(row["achieved_profit_pct"]), "pending")
         row = get_goal(ch, day)
     return row
 
@@ -93,16 +107,28 @@ def raise_goal(ch, day: date, factor: float = 1.1) -> dict:
 
 
 def daily_profit_pct(ch) -> float | None:
-    """Equal-weight paper-portfolio return over the trailing 24h, in percent."""
-    rows = ch.query(
-        f"SELECT ts, avg(equity) AS eq FROM {database_name()}.paper_equity FINAL "
-        "WHERE NOT startsWith(strategy, 'TEST_') GROUP BY ts ORDER BY ts"
+    """Mean trailing-24h return across active paper series, in percent.
+
+    Each (strategy, symbol) is compared with its own equity 24h earlier. Averaging raw
+    equity per timestamp instead (the old method) mixed different sets of series at
+    different timestamps and produced fake +27% days.
+    """
+    db = database_name()
+    latest = ch.query(
+        f"SELECT strategy, symbol, max(ts), argMax(equity, ts) FROM {db}.paper_equity FINAL "
+        "WHERE NOT startsWith(strategy, 'TEST_') GROUP BY strategy, symbol"
     ).result_rows
-    if len(rows) < 2:
+    if not latest:
         return None
-    last_ts, last_eq = rows[-1]
-    target = _utc(last_ts) - timedelta(hours=24)
-    past = [eq for ts, eq in rows if _utc(ts) <= target]
-    if not past or past[-1] <= 0:
+    now = max(_utc(r[2]) for r in latest)
+    cutoff = now - timedelta(hours=24)
+    past = {(s, y): float(eq) for s, y, eq in ch.query(
+        f"SELECT strategy, symbol, argMax(equity, ts) FROM {db}.paper_equity FINAL "
+        "WHERE NOT startsWith(strategy, 'TEST_') AND ts <= {c:DateTime64(3)} "
+        "GROUP BY strategy, symbol", parameters={"c": cutoff.replace(tzinfo=None)}
+    ).result_rows}
+    rets = [float(eq) / past[(s, y)] - 1.0 for s, y, ts, eq in latest
+            if _utc(ts) >= now - _ACTIVE_WITHIN and past.get((s, y), 0) > 0]
+    if not rets:
         return None
-    return (float(last_eq) / float(past[-1]) - 1.0) * 100.0
+    return sum(rets) / len(rets) * 100.0
