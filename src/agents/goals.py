@@ -19,7 +19,7 @@ from src.ingestion.schemas import database_name
 ANNUAL_TARGET_PCT = 10.0       # evidence-based target (recalibration note, section 4)
 DEFAULT_DAILY_GOAL_PCT = round(((1 + ANNUAL_TARGET_PCT / 100) ** (1 / 365) - 1) * 100, 4)
 MAX_DAILY_GOAL_PCT = 0.10      # ~44%/yr; raise_goal can't drift past this
-_ACTIVE_WITHIN = timedelta(hours=2)  # series with no newer row are stale, skip them
+_ACTIVE_WITHIN = timedelta(hours=9)  # stale series are skipped; carry marks every 8h
 _LOOKBACK_DAYS = 7
 _LOOKBACK_FRACTION = 0.5
 _GOAL_COLUMNS = ("goal_date", "target_profit_pct", "achieved_profit_pct",
