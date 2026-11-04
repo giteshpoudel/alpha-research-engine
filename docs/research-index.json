@@ -195,10 +195,11 @@
       "name": "Maker-first execution (live canary)",
       "kind": "forward",
       "coins": "BTC, ETH, SOL",
-      "outcome": "forward test",
-      "now": "live run restarting clean (exec2)",
-      "note": "60 round trips of ~$12 alternating post-only and market orders. Adopt if maker-first saves >= 1 bps per side and 90% finish within 75 s. First attempt voided: two copies ran at once for 4 cycles; restarted fresh with a single-instance lock.",
-      "prereg": "prereg/2026-11-03-maker-execution.md"
+      "outcome": "retire",
+      "now": "market orders kept",
+      "note": "60 vs 60 live sides on BTC/ETH/SOL. Maker-first +2.89 bps vs market +2.39 (needs 1 bps saving): cheaper when it fills (median +0.27), but 13% fell back to market at +9.6 bps avg. BTC worse by 1.12 bps. 100% done within 75 s. First attempt voided (two copies).",
+      "prereg": "prereg/2026-11-03-maker-execution.md",
+      "results": "2026-11-04-maker-execution-results.md"
     },
     {
       "date": "2026-11-03",
