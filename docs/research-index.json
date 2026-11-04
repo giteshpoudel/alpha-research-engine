@@ -1,6 +1,6 @@
 {
   "_about": "One row per pre-registered test or research note. Read by the chorus-howl dashboard (Research tab). Numbers are out-of-sample unless noted. Update when a test finishes.",
-  "trial_count": 402,
+  "trial_count": 406,
   "tests": [
     {
       "date": "2026-09-29",
@@ -289,6 +289,23 @@
         "max_dd": -0.08
       },
       "results": "2026-11-04-breakout-exits-results.md"
+    },
+    {
+      "date": "2026-11-04",
+      "name": "BTC leads, altcoins follow",
+      "kind": "backtest",
+      "coins": "BTC signal; ETH, SOL, XRP, DOGE, LINK, ADA, AVAX, BNB, LTC traded",
+      "outcome": "retire",
+      "now": "retired",
+      "note": "Buy altcoins that lagged a BTC hourly shock. Chosen z 2, hold 12h: +9.0% vs buy-and-hold -46.3%, but Sharpe 0.46 and costs x2 -1.9%. 3-hour holds lost everywhere: no fast catch-up.",
+      "prereg": "prereg/2026-11-04-btc-lead-lag.md",
+      "oos": {
+        "return": 0.09,
+        "sharpe": 0.46,
+        "max_dd": -0.119
+      },
+      "bh_return": -0.463,
+      "results": "2026-11-04-btc-lead-lag-results.md"
     }
   ]
 }
