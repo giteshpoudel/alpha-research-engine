@@ -1,6 +1,6 @@
 {
   "_about": "One row per pre-registered test or research note. Read by the chorus-howl dashboard (Research tab). Numbers are out-of-sample unless noted. Update when a test finishes.",
-  "trial_count": 395,
+  "trial_count": 399,
   "tests": [
     {
       "date": "2026-09-29",
@@ -255,6 +255,16 @@
       "note": "Lost money in every setting; fills come when price moves through the quote (adverse selection). Test -$0.91 on $60.",
       "prereg": "prereg/2026-11-04-batch4.md",
       "results": "2026-11-04-batch4-results.md"
+    },
+    {
+      "date": "2026-11-04",
+      "name": "Breakout on new coins",
+      "kind": "backtest",
+      "coins": "ADA, AVAX, BNB, LTC",
+      "outcome": "pre-registered",
+      "now": "not run yet",
+      "note": "The frozen breakout rule, unchanged, on 4 coins it was never designed or tuned on.",
+      "prereg": "prereg/2026-11-04-breakout-new-coins.md"
     }
   ]
 }
