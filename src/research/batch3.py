@@ -195,6 +195,8 @@ def run() -> dict:
         f.loc[f.index.isin(g), FEATURES] = np.nan
         feats[c] = f
         px = load_ohlcv(ch, c, "1h", start=IS_START, end=TEST_END)
+        if px.index.tz is not None:          # bars come back tz-aware UTC; trade hours are naive UTC
+            px.index = px.index.tz_convert("UTC").tz_localize(None)
         st = pd.Series(stress_flags(px, "1h"), index=px.index)
         hours = f.index
         opens[c] = px["open"].reindex(hours)
