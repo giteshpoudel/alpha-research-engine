@@ -205,10 +205,11 @@
       "name": "Batch 3: trade order flow",
       "kind": "backtest",
       "coins": "BTC, ETH, SOL",
-      "outcome": "pre-registered",
-      "now": "not run yet",
-      "note": "Does Kraken taker buy/sell imbalance predict 4-12h returns? 88 days of trades; test period 2026-10-01 to 11-03, run once. Best possible now: watch.",
-      "prereg": "prereg/2026-11-03-batch3-order-flow.md"
+      "outcome": "retire",
+      "now": "\u2013",
+      "note": "Best signal (1h flow z-score, 12h reversal) had test IC +0.002 vs -0.070 in selection; no pair significant. Order flow didn't predict 4-12h returns.",
+      "prereg": "prereg/2026-11-03-batch3-order-flow.md",
+      "results": "2026-11-03-batch3-results.md"
     }
   ]
 }
