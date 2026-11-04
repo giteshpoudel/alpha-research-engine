@@ -1,6 +1,6 @@
 {
   "_about": "One row per pre-registered test or research note. Read by the chorus-howl dashboard (Research tab). Numbers are out-of-sample unless noted. Update when a test finishes.",
-  "trial_count": 349,
+  "trial_count": 365,
   "tests": [
     {
       "date": "2026-09-29",
@@ -199,6 +199,16 @@
       "now": "live run restarting clean (exec2)",
       "note": "60 round trips of ~$12 alternating post-only and market orders. Adopt if maker-first saves >= 1 bps per side and 90% finish within 75 s. First attempt voided: two copies ran at once for 4 cycles; restarted fresh with a single-instance lock.",
       "prereg": "prereg/2026-11-03-maker-execution.md"
+    },
+    {
+      "date": "2026-11-03",
+      "name": "Batch 3: trade order flow",
+      "kind": "backtest",
+      "coins": "BTC, ETH, SOL",
+      "outcome": "pre-registered",
+      "now": "not run yet",
+      "note": "Does Kraken taker buy/sell imbalance predict 4-12h returns? 88 days of trades; test period 2026-10-01 to 11-03, run once. Best possible now: watch.",
+      "prereg": "prereg/2026-11-03-batch3-order-flow.md"
     }
   ]
 }

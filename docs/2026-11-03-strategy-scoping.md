@@ -55,7 +55,7 @@ own hunch.
 | 4 | Funding-rate extremes as a spot signal (crowding) | C | yes | yes | **Batch 1** |
 | 5 | ML meta-labeling of breakout signals | B/C | yes | yes | **Batch 2** |
 | 6 | Gradient-boosted cross-sectional ranker (4h/daily) | B | partly | yes | **Batch 2** |
-| 7 | Order-flow imbalance (hours horizon) | C | yes | 90 days only | **Batch 3** (forward-heavy) |
+| 7 | Order-flow imbalance (hours horizon) | C | yes | 90 days only | **Batch 3** (pre-registered 2026-11-03) |
 | 8 | Maker (post-only) execution for existing strategies | B | yes | live canary | **Parallel** execution project |
 | 9 | Short-term reversal | B (small illiquid coins) | yes | yes | Low: we only trade liquid coins |
 | 10 | Time-of-day / weekday effects | B (returns not persistent) | yes | yes | Low: use for execution timing only |
