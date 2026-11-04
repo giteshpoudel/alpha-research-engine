@@ -1,6 +1,6 @@
 {
   "_about": "One row per pre-registered test or research note. Read by the chorus-howl dashboard (Research tab). Numbers are out-of-sample unless noted. Update when a test finishes.",
-  "trial_count": 399,
+  "trial_count": 402,
   "tests": [
     {
       "date": "2026-09-29",
@@ -262,7 +262,7 @@
       "kind": "backtest",
       "coins": "ADA, AVAX, BNB, LTC",
       "outcome": "watch",
-      "now": "shadow run for ADA, BNB (setting up)",
+      "now": "shadow run for ADA, BNB",
       "note": "Frozen rule on 4 unseen coins: +18.3% vs buy-and-hold -50.5%. Costs x2 barely positive (+0.5%), 2022-24 -1.6%. ADA +39%, BNB +32%, LTC +2%, AVAX -10%.",
       "prereg": "prereg/2026-11-04-breakout-new-coins.md",
       "oos": {
@@ -272,6 +272,22 @@
       },
       "bh_return": -0.505,
       "results": "2026-11-04-breakout-new-coins-results.md"
+    },
+    {
+      "date": "2026-11-04",
+      "name": "Breakout tighter exits",
+      "kind": "backtest",
+      "coins": "BTC, ETH, SOL, XRP, DOGE, LINK",
+      "outcome": "retire",
+      "now": "current exit kept",
+      "note": "Same entries, exit only. Baseline +26.9% (2022-24 +80.8%). Tight 1.5 ATR +27.1%, DD -8% but costs x2 +10.2% and 2022-24 +12.1%. Tight 1.0 ATR +12.4%. Profit lock: 55% wins but +24.9%, 2022-24 +29.1%.",
+      "prereg": "prereg/2026-11-04-breakout-exits.md",
+      "oos": {
+        "return": 0.271,
+        "sharpe": 1.13,
+        "max_dd": -0.08
+      },
+      "results": "2026-11-04-breakout-exits-results.md"
     }
   ]
 }
