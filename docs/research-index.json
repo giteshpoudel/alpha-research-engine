@@ -189,6 +189,16 @@
       "note": "52.7% accuracy (AUC 0.54), eaten by daily trading costs.",
       "prereg": "prereg/2026-11-03-batch2-ml.md",
       "results": "2026-11-03-batch2-results.md"
+    },
+    {
+      "date": "2026-11-03",
+      "name": "Maker-first execution (live canary)",
+      "kind": "forward",
+      "coins": "BTC, ETH, SOL",
+      "outcome": "forward test",
+      "now": "waiting for the live run",
+      "note": "60 round trips of ~$12 alternating post-only and market orders. Adopt if maker-first saves >= 1 bps per side and 90% finish within 75 s.",
+      "prereg": "prereg/2026-11-03-maker-execution.md"
     }
   ]
 }
