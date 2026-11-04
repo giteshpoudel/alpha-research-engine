@@ -110,7 +110,10 @@ def load_tape(ch, coin: str, start: datetime, end: datetime) -> pd.DataFrame:
     q = (f"SELECT ts, price, qty FROM {db}.market_trades WHERE exchange = 'binance_us' AND symbol = %(s)s "
          f"AND ts >= %(a)s AND ts < %(b)s ORDER BY ts, trade_id")
     df = ch.query_df(q, parameters={"s": coin, "a": start.replace(tzinfo=None), "b": end.replace(tzinfo=None)})
-    df["t"] = pd.to_datetime(df["ts"]).astype("int64") / 1e9
+    ts = pd.to_datetime(df["ts"])
+    ts = ts.dt.tz_localize("UTC") if ts.dt.tz is None else ts.dt.tz_convert("UTC")
+    # seconds since epoch, independent of the datetime unit (ClickHouse returns microseconds)
+    df["t"] = (ts - pd.Timestamp("1970-01-01", tz="UTC")).dt.total_seconds()
     return df[["t", "price", "qty"]].reset_index(drop=True)
 
 
