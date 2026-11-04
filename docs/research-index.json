@@ -216,30 +216,45 @@
       "name": "Batch 4: buy the dip in an uptrend",
       "kind": "backtest",
       "coins": "6 coins",
-      "outcome": "pre-registered",
-      "now": "not run yet",
-      "note": "Buy sharp 1-3 day drops while above the 50/100-day average; hold 3-7 days.",
-      "prereg": "prereg/2026-11-04-batch4.md"
+      "outcome": "retire",
+      "now": "\u2013",
+      "note": "In-sample already weak (Sharpe 0.32); out of sample mostly in cash, 20 trades lost 2.6%.",
+      "prereg": "prereg/2026-11-04-batch4.md",
+      "results": "2026-11-04-batch4-results.md",
+      "oos": {
+        "return": -0.026,
+        "sharpe": -0.19,
+        "max_dd": -0.076
+      },
+      "bh_return": -0.416
     },
     {
       "date": "2026-11-04",
       "name": "Batch 4: buy futures panic (funding)",
       "kind": "backtest",
       "coins": "6 coins",
-      "outcome": "pre-registered",
-      "now": "not run yet",
-      "note": "Buy spot when Hyperliquid funding is in its bottom 5-10% of 90 days; hold 1-2 weeks.",
-      "prereg": "prereg/2026-11-04-batch4.md"
+      "outcome": "retire",
+      "now": "\u2013",
+      "note": "In-sample Sharpe 1.44 (mostly 2024); out of sample -10% over 109 entries.",
+      "prereg": "prereg/2026-11-04-batch4.md",
+      "results": "2026-11-04-batch4-results.md",
+      "oos": {
+        "return": -0.101,
+        "sharpe": -0.02,
+        "max_dd": -0.383
+      },
+      "bh_return": -0.416
     },
     {
       "date": "2026-11-04",
       "name": "Batch 4: passive market making",
       "kind": "backtest",
       "coins": "XRP, DOGE, LINK",
-      "outcome": "pre-registered",
-      "now": "not run yet",
-      "note": "Rest buy/sell orders around the price with 0% maker fees; 35 days of trades, best possible: watch.",
-      "prereg": "prereg/2026-11-04-batch4.md"
+      "outcome": "retire",
+      "now": "\u2013",
+      "note": "Lost money in every setting; fills come when price moves through the quote (adverse selection). Test -$0.91 on $60.",
+      "prereg": "prereg/2026-11-04-batch4.md",
+      "results": "2026-11-04-batch4-results.md"
     }
   ]
 }
