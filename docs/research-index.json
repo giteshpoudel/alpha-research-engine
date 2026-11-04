@@ -1,84 +1,194 @@
 {
   "_about": "One row per pre-registered test or research note. Read by the chorus-howl dashboard (Research tab). Numbers are out-of-sample unless noted. Update when a test finishes.",
-  "trial_count": 337,
+  "trial_count": 349,
   "tests": [
     {
-      "date": "2026-09-29", "name": "5m mean-reversion scalping", "kind": "backtest",
-      "coins": "BTC, ETH, SOL", "outcome": "retire",
+      "date": "2026-09-29",
+      "name": "5m mean-reversion scalping",
+      "kind": "backtest",
+      "coins": "BTC, ETH, SOL",
+      "outcome": "retire",
       "note": "Edge disappeared after realistic costs (3-5 bps per side) and one tail event (2025-10-10 crash).",
       "results": "2026-09-29-intraday-and-carry-research.md"
     },
     {
-      "date": "2026-09-29", "name": "Funding carry (spot long + perp short)", "kind": "backtest",
-      "coins": "11 coins", "outcome": "not tradeable here",
+      "date": "2026-09-29",
+      "name": "Funding carry (spot long + perp short)",
+      "kind": "backtest",
+      "coins": "11 coins",
+      "outcome": "not tradeable here",
       "note": "About +3% to +14% a year net, market-neutral. Needs perpetual futures, which Binance.US doesn't offer to US users.",
       "results": "2026-09-29-intraday-and-carry-research.md"
     },
     {
-      "date": "2026-11-02", "name": "Phase 2 intraday: overshoot fade", "kind": "backtest",
-      "coins": "BTC, ETH, SOL", "outcome": "retire",
+      "date": "2026-11-02",
+      "name": "Phase 2 intraday: overshoot fade",
+      "kind": "backtest",
+      "coins": "BTC, ETH, SOL",
+      "outcome": "retire",
       "note": "Failed the in-sample bar.",
-      "prereg": "prereg/2026-11-02-phase2-intraday.md", "results": "2026-11-02-phase2-results.md"
+      "prereg": "prereg/2026-11-02-phase2-intraday.md",
+      "results": "2026-11-02-phase2-results.md"
     },
     {
-      "date": "2026-11-03", "name": "Breakout v1 (BTC/ETH/SOL)", "kind": "backtest",
-      "coins": "BTC, ETH, SOL", "oos": {"return": 0.245, "sharpe": 0.80, "max_dd": -0.228},
-      "bh_return": -0.298, "outcome": "retire", "now": "paper: Breakout v1 (comparison)",
+      "date": "2026-11-03",
+      "name": "Breakout v1 (BTC/ETH/SOL)",
+      "kind": "backtest",
+      "coins": "BTC, ETH, SOL",
+      "oos": {
+        "return": 0.245,
+        "sharpe": 0.8,
+        "max_dd": -0.228
+      },
+      "bh_return": -0.298,
+      "outcome": "retire",
+      "now": "paper: Breakout v1 (comparison)",
       "note": "Drawdown 22.8% over the old 20% limit. ETH +43%, SOL +37%, BTC -8.5%.",
-      "prereg": "prereg/2026-11-03-phase2-oos-exploratory.md", "results": "2026-11-03-oos-breakout-results.md"
+      "prereg": "prereg/2026-11-03-phase2-oos-exploratory.md",
+      "results": "2026-11-03-oos-breakout-results.md"
     },
     {
-      "date": "2026-11-03", "name": "Breakout v2 (ETH/SOL, brake)", "kind": "forward",
-      "coins": "ETH, SOL", "outcome": "forward test", "now": "paper: Breakout v2",
+      "date": "2026-11-03",
+      "name": "Breakout v2 (ETH/SOL, brake)",
+      "kind": "forward",
+      "coins": "ETH, SOL",
+      "outcome": "forward test",
+      "now": "paper: Breakout v2",
       "note": "Designed after v1's result, so only forward data counts. 3-week check around 2026-11-24.",
       "prereg": "prereg/2026-11-03-breakout-v2-forward.md"
     },
     {
-      "date": "2026-11-03", "name": "Alt-coin breakout (XRP/DOGE/LINK)", "kind": "backtest",
-      "coins": "XRP, DOGE, LINK", "oos": {"return": 0.279, "sharpe": 0.72, "max_dd": -0.265},
-      "bh_return": -0.513, "outcome": "retire",
+      "date": "2026-11-03",
+      "name": "Alt-coin breakout (XRP/DOGE/LINK)",
+      "kind": "backtest",
+      "coins": "XRP, DOGE, LINK",
+      "oos": {
+        "return": 0.279,
+        "sharpe": 0.72,
+        "max_dd": -0.265
+      },
+      "bh_return": -0.513,
+      "outcome": "retire",
       "note": "Drawdown 26.5% over the old 20% limit. XRP +93%, DOGE +42%, LINK -31%.",
-      "prereg": "prereg/2026-11-03-alt-breakout.md", "results": "2026-11-03-alt-breakout-results.md"
+      "prereg": "prereg/2026-11-03-alt-breakout.md",
+      "results": "2026-11-03-alt-breakout-results.md"
     },
     {
-      "date": "2026-11-03", "name": "Breakout XRP/DOGE (brake)", "kind": "forward",
-      "coins": "XRP, DOGE", "outcome": "forward test", "now": "paper: Breakout XRP/DOGE",
+      "date": "2026-11-03",
+      "name": "Breakout XRP/DOGE (brake)",
+      "kind": "forward",
+      "coins": "XRP, DOGE",
+      "outcome": "forward test",
+      "now": "paper: Breakout XRP/DOGE",
       "note": "Coins picked after seeing results, so only forward data counts.",
       "prereg": "prereg/2026-11-03-alt-breakout-forward.md"
     },
     {
-      "date": "2026-11-03", "name": "Batch 1: daily trend, vol-scaled", "kind": "backtest",
-      "coins": "6 coins", "oos": {"return": 0.055, "sharpe": 0.24, "max_dd": -0.327},
-      "bh_return": -0.416, "outcome": "retire",
+      "date": "2026-11-03",
+      "name": "Batch 1: daily trend, vol-scaled",
+      "kind": "backtest",
+      "coins": "6 coins",
+      "oos": {
+        "return": 0.055,
+        "sharpe": 0.24,
+        "max_dd": -0.327
+      },
+      "bh_return": -0.416,
+      "outcome": "retire",
       "note": "Strong 2022-24 (Sharpe 1.62), nearly flat in the 2025-26 bear market.",
-      "prereg": "prereg/2026-11-03-batch1.md", "results": "2026-11-03-batch1-results.md"
+      "prereg": "prereg/2026-11-03-batch1.md",
+      "results": "2026-11-03-batch1-results.md"
     },
     {
-      "date": "2026-11-03", "name": "Batch 1: momentum rotation", "kind": "backtest",
-      "coins": "6 coins", "oos": {"return": -0.379, "sharpe": -0.36, "max_dd": -0.487},
-      "bh_return": -0.416, "outcome": "retire",
+      "date": "2026-11-03",
+      "name": "Batch 1: momentum rotation",
+      "kind": "backtest",
+      "coins": "6 coins",
+      "oos": {
+        "return": -0.379,
+        "sharpe": -0.36,
+        "max_dd": -0.487
+      },
+      "bh_return": -0.416,
+      "outcome": "retire",
       "note": "Overfit to the 2023-24 bull run.",
-      "prereg": "prereg/2026-11-03-batch1.md", "results": "2026-11-03-batch1-results.md"
+      "prereg": "prereg/2026-11-03-batch1.md",
+      "results": "2026-11-03-batch1-results.md"
     },
     {
-      "date": "2026-11-03", "name": "Batch 1: trend + funding filter", "kind": "backtest",
-      "coins": "6 coins", "oos": {"return": 0.047, "sharpe": 0.22, "max_dd": -0.327},
-      "bh_return": -0.416, "outcome": "retire",
+      "date": "2026-11-03",
+      "name": "Batch 1: trend + funding filter",
+      "kind": "backtest",
+      "coins": "6 coins",
+      "oos": {
+        "return": 0.047,
+        "sharpe": 0.22,
+        "max_dd": -0.327
+      },
+      "bh_return": -0.416,
+      "outcome": "retire",
       "note": "The funding filter made trend worse in every setting.",
-      "prereg": "prereg/2026-11-03-batch1.md", "results": "2026-11-03-batch1-results.md"
+      "prereg": "prereg/2026-11-03-batch1.md",
+      "results": "2026-11-03-batch1-results.md"
     },
     {
-      "date": "2026-11-03", "name": "Batch 1: vol-sized breakout", "kind": "backtest",
-      "coins": "6 coins", "oos": {"return": 0.269, "sharpe": 0.90, "max_dd": -0.201},
-      "bh_return": -0.416, "outcome": "watch", "now": "paper: Breakout vol-sized",
+      "date": "2026-11-03",
+      "name": "Batch 1: vol-sized breakout",
+      "kind": "backtest",
+      "coins": "6 coins",
+      "oos": {
+        "return": 0.269,
+        "sharpe": 0.9,
+        "max_dd": -0.201
+      },
+      "bh_return": -0.416,
+      "outcome": "watch",
+      "now": "paper: Breakout vol-sized",
       "note": "Best result so far. Capped at watch because its signals were seen before.",
-      "prereg": "prereg/2026-11-03-batch1.md", "results": "2026-11-03-batch1-results.md"
+      "prereg": "prereg/2026-11-03-batch1.md",
+      "results": "2026-11-03-batch1-results.md"
     },
     {
-      "date": "2026-11-03", "name": "Breakout vol-sized (6 coins)", "kind": "forward",
-      "coins": "6 coins", "outcome": "forward test", "now": "paper: Breakout vol-sized",
+      "date": "2026-11-03",
+      "name": "Breakout vol-sized (6 coins)",
+      "kind": "forward",
+      "coins": "6 coins",
+      "outcome": "forward test",
+      "now": "paper: Breakout vol-sized",
       "note": "Promotion to candidate needs 3 months and 15 entries of forward data.",
       "prereg": "prereg/2026-11-03-breakout-vol-forward.md"
+    },
+    {
+      "date": "2026-11-03",
+      "name": "Batch 2: ML meta-labeled breakout",
+      "kind": "backtest",
+      "coins": "6 coins",
+      "oos": {
+        "return": 0.001,
+        "sharpe": 0.05,
+        "max_dd": -0.138
+      },
+      "bh_return": -0.416,
+      "outcome": "retire",
+      "note": "Model no better than a coin flip (AUC 0.50); filtering removed the big winners.",
+      "prereg": "prereg/2026-11-03-batch2-ml.md",
+      "results": "2026-11-03-batch2-results.md"
+    },
+    {
+      "date": "2026-11-03",
+      "name": "Batch 2: gradient-boosted daily model",
+      "kind": "backtest",
+      "coins": "6 coins",
+      "oos": {
+        "return": -0.115,
+        "sharpe": 0.01,
+        "max_dd": -0.409
+      },
+      "bh_return": -0.416,
+      "outcome": "retire",
+      "note": "52.7% accuracy (AUC 0.54), eaten by daily trading costs.",
+      "prereg": "prereg/2026-11-03-batch2-ml.md",
+      "results": "2026-11-03-batch2-results.md"
     }
   ]
 }
