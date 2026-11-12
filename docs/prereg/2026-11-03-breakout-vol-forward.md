@@ -38,3 +38,19 @@ pilot-limit changes it needs (6 coins, up to 6 positions). The user starts live 
 
 **Retire** at any point if the ideal sleeve drawdown reaches 20%, or after 3 months if
 ideal return ≤ 0.
+
+## Note added 2026-11-12: internet outage
+
+From 2026-11-09 06:21 to 2026-11-12 05:25 UTC the Mac running the shadow runs had no
+internet. All five shadow runs tripped their kill switch on stale market data at 06:25 UTC
+and stayed paused until the user approved clearing them on 2026-11-12 22:27 UTC (about 3.7
+days). Nothing was held, so nothing was sold. How it's handled, decided after the fact and
+on the cautious side:
+
+- The trip isn't counted as a "kill-switch trip caused by the strategy or the loop", which
+  is the wording above; trips for any other reason still count.
+- The paused days don't count toward the minimum shadow period (3 weeks, or 3 months for
+  watch-tier runs). Entries the ideal backtest takes while a run is paused have no shadow
+  fill to compare against.
+- Order-book data from those 3 days is missing and can't be refilled; the order-book test
+  waits about 3 days longer.
