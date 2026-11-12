@@ -1,6 +1,6 @@
 {
   "_about": "One row per pre-registered test or research note. Read by the chorus-howl dashboard (Research tab). Numbers are out-of-sample unless noted. Update when a test finishes.",
-  "trial_count": 406,
+  "trial_count": 407,
   "tests": [
     {
       "date": "2026-09-29",
@@ -306,6 +306,23 @@
       },
       "bh_return": -0.463,
       "results": "2026-11-04-btc-lead-lag-results.md"
+    },
+    {
+      "date": "2026-11-12",
+      "name": "Breakout on Zcash",
+      "kind": "backtest",
+      "coins": "ZEC (Coinbase prices, Binance.US costs)",
+      "outcome": "retire",
+      "now": "retired",
+      "note": "Frozen breakout rule on ZEC, picked for its big recent moves. 2025-26 +135% (Sharpe 1.34) but the pre-registered hindsight guard failed: 2022-24 lost 61.6%, as much as holding it. Works while a coin trends, loses when it chops.",
+      "prereg": "prereg/2026-11-12-zcash-breakout.md",
+      "oos": {
+        "return": 1.354,
+        "sharpe": 1.34,
+        "max_dd": -0.266
+      },
+      "bh_return": 21.244,
+      "results": "2026-11-12-zcash-breakout-results.md"
     }
   ]
 }
