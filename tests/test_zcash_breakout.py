@@ -14,7 +14,7 @@ def test_simulate_holds_next_bar_and_charges_both_sides():
     w = pd.Series([1, 0, 0, 0, 0], index=idx, dtype=float)        # decided at bar 0 close
     net, held, _ = simulate(opens, w, pd.Series(False, index=idx))
     assert held.tolist() == [0, 1, 0, 0, 0]
-    assert net.iloc[1] == 0.10 - COST and net.iloc[2] == -COST
+    assert abs(net.iloc[1] - (0.10 - COST)) < 1e-12 and abs(net.iloc[2] + COST) < 1e-12
 
 
 def test_stress_triples_cost():
